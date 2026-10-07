@@ -1,0 +1,69 @@
+# Déploiement automatique de NEXUS Logistics (Cloudflare Pages) à chaque push sur main.
+# Prérequis (une seule fois) : secret CLOUDFLARE_API_TOKEN (jeton « Cloudflare Pages : Modifier »),
+# le même que pour Devizo, My shop et CV en ligne.
+# Mode réel : variables de dépôt VITE_SUPABASE_URL et VITE_SUPABASE_ANON_KEY (clé publique).
+# Sans elles, le site publié est la DÉMONSTRATION (base dans le navigateur, données fictives).
+# Les migrations Supabase ne sont PAS appliquées ici : elles se jouent à la main (voir CLAUDE.md).
+name: Déploiement production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Jamais deux déploiements en parallèle : le second attend la fin du premier.
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: b052ef72eb7bca73ee5f8a26be23f8d2
+      VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Installation
+        run: npm ci
+
+      # Toute la logique SQL est rejouée sur un vrai Postgres (PGlite) : parcours, droits, cycles
+      - name: Tests (SQL + algorithmes)
+        run: npm test
+
+      - name: Construction
+        run: npm run build
+
+      - name: Jeton Cloudflare présent ?
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::error::Secret CLOUDFLARE_API_TOKEN manquant (Settings → Secrets and variables → Actions)."
+            exit 1
+          fi
+
+      - name: Déploiement Cloudflare Pages
+        run: npx --yes wrangler@latest pages deploy dist --project-name nexus-logistics --branch main --commit-hash "$GITHUB_SHA" --commit-message "$(git log -1 --pretty=%s)" --commit-dirty=true
+
+      - name: Vérification de la production
+        run: |
+          sleep 15
+          page=$(curl -sf https://nexus-logistics-6my.pages.dev/)
+          echo "$page" | grep -q '<title>NEXUS Logistics</title>'
+          # le script de la page publiée doit être celui de ce build (cache immuable sur /assets/*)
+          entry=$(grep -o 'src="/assets/index-[^"]*\.js"' dist/index.html | head -1)
+          echo "$page" | grep -q "$entry"
+          curl -sf https://nexus-logistics-6my.pages.dev/suivi/00000000-0000-4000-a000-000000000000 | grep -q '<div id="root">'
+          curl -sf https://nexus-logistics-6my.pages.dev/sw.js | grep -q "nexus-logistics-v"
+          echo "Production OK ($entry)"

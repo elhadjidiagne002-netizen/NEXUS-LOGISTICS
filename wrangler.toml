@@ -1,0 +1,7 @@
+# Cloudflare Pages — site statique construit par Vite (npm run build → dist/).
+# Déploiement automatique : .github/workflows/deploy.yml à chaque push sur main.
+# À la main, depuis la racine du dépôt :
+#   npm run build && npx wrangler pages deploy dist --project-name nexus-logistics
+name = "nexus-logistics"
+pages_build_output_dir = "dist"
+compatibility_date = "2026-09-01"
