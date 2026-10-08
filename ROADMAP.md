@@ -123,12 +123,11 @@ l'aperçu (`logistics-full`), migrations D1 appliquées en ligne, déploiement d
       affecter ; rafraîchissement par interrogation toutes les 15 s), `lg_ack_alert` (`lg_transfer_stop` : C5).
 - [x] Tâches planifiées : route `POST /api/cron/<tâche>` (secret `CRON_SECRET`), surveillance toutes les 5 min
       (retards, arrêts longs, chauffeurs sans position, colis oubliés, documents, verrous de préparation) et nettoyage
-      horaire, en requêtes groupées pour toutes les entreprises ; petit Worker `cron/` avec **un seul** déclencheur.
+      horaire, en requêtes groupées pour toutes les entreprises ; appelées par `nexus-cron` (le Worker dédié `cron/` n'a jamais été déclenché par Cloudflare : retiré le 08/10/2026).
 - [x] Indicateurs (`lg_kpis`, `lg_kpis_by_axis`), coûts et marges (`lg_costs`), prévision (`lg_forecast`),
       anomalies (`lg_anomalies`), classement (`lg_leaderboard`), retours par cause (`lg_return_stats`), renforts
       (`lg_reinforcement_*`, `lg_my_reinforcements`). Calculés à la lecture : aucune écriture. 7 tests serveur.
-- Reste : migration `0007` à appliquer en ligne ; déployer le Worker `cron/` et poser `CRON_SECRET` (Worker et
-      Pages, voir `cron/wrangler.toml`) ; rapport du soir et message de renfort → C8 (messages) ; relances des
+- Reste : migration `0007` à appliquer en ligne ; tâches branchées sur `nexus-cron` (fait le 08/10/2026) ; rapport du soir et message de renfort → C8 (messages) ; relances des
       vendeurs → C11 (engagements de délai) ; paiement des gains (marquer « payé ») → C11.
 
 ## C8 — Messages clients ✅ (08/10/2026)

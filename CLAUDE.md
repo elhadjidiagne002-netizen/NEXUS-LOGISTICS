@@ -16,9 +16,14 @@ Plan et état : **`ROADMAP.md`**. Historique : `JOURNAL.md`.
 - **Base** : D1 `nexus-logistics` (id dans `wrangler.toml`), migrations **`migrations/NNNN_*.sql`**
   (SQLite). En ligne : `npx wrangler d1 migrations apply nexus-logistics --remote` AVANT de déployer.
   `deploy.yml` les applique automatiquement avant chaque publication.
-- **Tâches planifiées** : Worker `cron/` (`nexus-logistics-cron`, un déclencheur toutes les 5 min) → `POST
-  /api/cron/<tâche>` avec `CRON_SECRET` (même valeur côté Worker et Pages, posée depuis un fichier généré,
-  jamais retapée). Le Worker **lève** si une tâche échoue (sinon Cloudflare le compte « en succès »).
+- **Tâches planifiées** : appelées par **`nexus-cron`**, le planificateur de NEXUS Market (dépôt `nexus-market`,
+  `cron-worker/src/logistique.js`), toutes les 5 min → `POST /api/cron/<tâche>` avec l'en-tête `x-cron-secret`.
+  Le Worker dédié `nexus-logistics-cron` n'a **jamais** été déclenché par Cloudflare (08/10/2026 : déclencheur
+  enregistré, 0 invocation en 1 h 20) : retiré du dépôt, déclencheur coupé. Le secret partagé vit dans le
+  secret GitHub `NXL_CRON_SECRET` de nexus-market (posé dans le Worker par `deploy-cron-worker.yml`) ET dans
+  `CRON_SECRET` de ce projet Pages : pour le changer, poser la nouvelle valeur aux DEUX endroits depuis un même
+  fichier généré (jamais retapée), redéployer ce projet, relancer `deploy-cron-worker.yml`. Vérifier par les
+  effets : `select * from cron_runs` (dernier passage de chaque tâche).
 - **Secrets Pages** (jamais dans le dépôt) : `CRON_SECRET`, `SECRETS_KEY` (chiffre les jetons WhatsApp des
   entreprises : **ne jamais la changer**, les jetons enregistrés deviendraient illisibles), `ADMIN_EMAILS`
   (administration de la plateforme), `BREVO_API_KEY` facultatif.

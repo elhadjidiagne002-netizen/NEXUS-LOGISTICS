@@ -2,6 +2,15 @@
 
 Le plus récent en premier.
 
+## 08/10/2026 — Tâches planifiées confiées à nexus-cron (accord de l'utilisateur)
+- Le Worker dédié n'étant jamais déclenché par Cloudflare, **`nexus-cron`** (planificateur de NEXUS Market, fiable,
+  alertes Sentry) appelle désormais `watchdog`, `reminders`, `messages` à chaque passage, `purge` à l'heure pile et
+  `evening` à 19 h (`nexus-market/cron-worker/src/logistique.js`). Leurs échecs entrent dans son bilan (exception +
+  alerte), avant la veille de la base NEXUS dont elles ne dépendent pas.
+- **Nouveau secret partagé** généré et posé depuis un même fichier (effacé ensuite) : `CRON_SECRET` de ce projet
+  Pages + secret GitHub `NXL_CRON_SECRET` de nexus-market (posé dans le Worker par `deploy-cron-worker.yml`).
+- `cron/` retiré du dépôt ; déclencheur de `nexus-logistics-cron` coupé (le Worker reste, inerte).
+
 ## 08/10/2026 — ⚠️ Tâches planifiées : le Worker cron n'est jamais déclenché par Cloudflare
 - `nexus-logistics-cron` est déployé, son déclencheur `*/5 * * * *` est enregistré (API schedules), son secret posé,
   et le serveur accepte le secret (403 à un faux secret, pas 503). Mais **aucune exécution** entre 18:15 et 19:35 :

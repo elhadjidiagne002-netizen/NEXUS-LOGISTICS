@@ -15,7 +15,7 @@ En ligne : **https://logistique.nexusmarket.sn** — formule gratuite (300 comma
 | API (Pages Functions, runtime Workers) | `functions/api/[[path]].js` → `server/` |
 | Fonctions métier `lg_*` (`POST /api/rpc/<nom>`) | `server/rpc/*.js` |
 | Base (D1 `nexus-logistics`, multi-entreprises) | `migrations/*.sql` |
-| Tâches planifiées (toutes les 5 min) | Worker `cron/` |
+| Tâches planifiées (toutes les 5 min) | appelées par `nexus-cron` (dépôt nexus-market) |
 | API des boutiques en ligne, statuts signés | `docs/integration-boutiques.md` |
 
 Chaque entreprise ne voit que ses données (`company_id` sur toutes les tables, test d'isolation pour chaque
@@ -59,5 +59,5 @@ npx wrangler d1 migrations apply nexus-logistics --remote
 npm run build && npx wrangler pages deploy dist --project-name nexus-logistics --branch main
 ```
 
-Secrets du projet Pages (jamais dans le dépôt) : `CRON_SECRET` (même valeur que le Worker `cron/`),
+Secrets du projet Pages (jamais dans le dépôt) : `CRON_SECRET` (même valeur que le secret GitHub `NXL_CRON_SECRET` de nexus-market),
 `SECRETS_KEY`, `ADMIN_EMAILS`, et `BREVO_API_KEY` en option (e-mail de secours).
