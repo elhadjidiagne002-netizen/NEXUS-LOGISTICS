@@ -25,7 +25,7 @@ function DockHome() {
     <PageHead title="Quai" back="/" />
     <Tabs value={tab} onChange={setTab} tabs={[['trips', 'Voyages'], ['docks', 'Quais'], ['staged', 'Colis à quai'], ['inbound', 'Collectes et reprises'], ['receive', 'Réception'], ['returns', 'Retours']]} />
     {tab === 'trips' && <Trips />}{tab === 'docks' && <Docks />}{tab === 'staged' && <Staged />}{tab === 'returns' && <Returns />}
-    {tab === 'inbound' && <Inbound />}{tab === 'receive' && <Receive />}
+    {tab === 'inbound' && <Inbound />}{tab === 'receive' && <div className="split"><Receive /><Dropoffs /></div>}
   </>;
 }
 
@@ -294,10 +294,13 @@ function Receive() {
   const [last, setLast] = useState(null); const [w, setW] = useState('');
   const [run, busy] = useAction();
   return <Card><h2>Réception au hub</h2>
-    <p className="small muted">Scan d'entrée des colis collectés chez les vendeurs ou repris chez les clients : contrôle de l'emballage, pesée, mise à quai.</p>
+    <p className="small muted">Scan d'entrée des colis collectés chez les vendeurs, apportés par eux (dépôt) ou repris chez les clients : contrôle de l'emballage, pesée, mise à quai.</p>
     <Field label="Poids constaté (kg, facultatif)"><input className="input" inputMode="decimal" value={w} onChange={(e) => setW(e.target.value)} /></Field>
     <div style={{ marginTop: 8 }}><Scanner busy={busy} placeholder="Code du colis reçu" onCode={(code) => run(async () => {
-      const r = await act('lg_receive', { p_code: code, p_weight_g: w ? Math.round(Number(w.replace(',', '.')) * 1000) : null }, `Réception ${code}`);
+      const weight = w ? Math.round(Number(w.replace(',', '.')) * 1000) : null;
+      let r = await act('lg_receive', { p_code: code, p_weight_g: weight }, `Réception ${code}`);
+      // colis apporté par le vendeur (dépôt) : il est encore « chez lui », sans voyage
+      if (r.ok === false && r.error === 'not_in_transit_to_hub' && r.status === 'staged') r = await act('lg_dropoff_receive', { p_code: code, p_weight_g: weight }, `Dépôt ${code}`);
       setLast({ code, ...r }); setW(''); if (r.ok) feedback('ok'); return r;
     })} /></div>
     {last?.ok && !last.queued && <div className="flash ok" style={{ marginTop: 10 }}><span className="ico">✔</span><div>
@@ -353,4 +356,30 @@ function Docks() {
       <Btn kind="primary" disabled={!form.code || busy} onClick={() => run(async () => { const r = await rpc('lg_dock_upsert', { p: form }); setForm(null); reload(); return r; }, { ok: 'Quai créé' })}>Créer</Btn>
     </div></Modal>}
   </div>;
+}
+
+// Dépôts des vendeurs (P2) : créneaux réservés du jour, ouverture de créneaux
+function Dropoffs() {
+  const { data, reload } = useRpc('lg_dropoffs_today', {}, { refresh: 30000 });
+  const me = useMe();
+  const [form, setForm] = useState(null);
+  const [run, busy] = useAction();
+  const day = (n) => new Date(Date.now() + n * 864e5).toLocaleDateString('en-CA', { timeZone: 'Africa/Dakar' });
+  return <Card><div className="row between"><h3 style={{ margin: 0 }}>Dépôts des vendeurs aujourd'hui</h3>
+      {(me?.is_admin || me?.roles?.some((r) => r.role === 'dock_chief')) && <Btn size="sm" onClick={() => setForm({ from: day(1), days: '5', times: '09:00-11:00, 15:00-17:00', capacity: '6' })}><Icon name="plus" size={16} />Créneaux</Btn>}</div>
+    {!data?.length ? <Empty icon="store">Aucun dépôt réservé aujourd'hui.</Empty> : <div className="list" style={{ marginTop: 8 }}>{data.map((b) => <div key={b.id} className="line">
+      <span className="grow"><b>{b.vendor}</b><div className="small muted">{b.start.slice(0, 5)}–{b.end.slice(0, 5)} · {b.packages} colis annoncé(s)</div></span>
+      {b.status === 'arrived' ? <Badge kind="ok">arrivé · {b.received} reçu(s)</Badge> : b.late ? <Badge kind="bad">en retard</Badge> : <Badge kind="info">attendu</Badge>}
+      {b.phone && <a className="btn sm" href={`tel:${b.phone}`}><Icon name="phone" size={14} /></a>}</div>)}</div>}
+    <p className="small muted">Scannez les colis apportés dans « Réception au hub » : la réservation passe « arrivé ». Un vendeur qui a réservé un dépôt n'est plus proposé à la collecte.</p>
+    {form && <Modal title="Ouvrir des créneaux de dépôt" onClose={() => setForm(null)}><div className="stack">
+      <div className="grid cols-2"><Field label="À partir du"><input className="input" type="date" value={form.from} onChange={(e) => setForm({ ...form, from: e.target.value })} /></Field>
+        <Field label="Nombre de jours"><input className="input" inputMode="numeric" value={form.days} onChange={(e) => setForm({ ...form, days: e.target.value.replace(/\D/g, '') })} /></Field></div>
+      <Field label="Plages (séparées par des virgules)"><input className="input mono" value={form.times} onChange={(e) => setForm({ ...form, times: e.target.value })} /></Field>
+      <Field label="Vendeurs par créneau"><input className="input" inputMode="numeric" value={form.capacity} onChange={(e) => setForm({ ...form, capacity: e.target.value.replace(/\D/g, '') })} /></Field>
+      <Btn kind="primary" disabled={busy || !form.days || !form.capacity} onClick={() => run(async () => {
+        const r = await rpc('lg_dropoff_slots_create', { p_from: form.from, p_days: Number(form.days), p_times: form.times.split(',').map((x) => x.trim()).filter(Boolean), p_capacity: Number(form.capacity) });
+        setForm(null); reload(); return r;
+      }, { ok: 'Créneaux ouverts' })}>Ouvrir</Btn></div></Modal>}
+  </Card>;
 }

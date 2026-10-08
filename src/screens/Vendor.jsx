@@ -22,13 +22,14 @@ export default function Vendor() {
       <Stat label="taux de rupture (30 j)" value={o.stockout_pct_30d != null ? `${o.stockout_pct_30d} %` : '—'} kind={o.stockout_pct_30d > 5 ? 'bad' : ''} />
       <Stat label="fiches à compléter" value={o.products_missing_data} kind={o.products_missing_data ? 'todo' : 'ok'} />
     </div>
-    <div style={{ marginTop: 12 }}><Tabs value={tab} onChange={setTab} tabs={[['packages', 'Mes colis'], ['commitment', 'Mon engagement'], ['payouts', 'Reversements'], ['products', 'Fiches produit'], ['lots', `Péremption${lots.data?.length ? ` (${lots.data.length})` : ''}`]]} /></div>
+    <div style={{ marginTop: 12 }}><Tabs value={tab} onChange={setTab} tabs={[['packages', 'Mes colis'], ['commitment', 'Mon engagement'], ['payouts', 'Reversements'], ['dropoff', 'Dépôt au hub'], ['products', 'Fiches produit'], ['lots', `Péremption${lots.data?.length ? ` (${lots.data.length})` : ''}`]]} /></div>
     {tab === 'packages' && <Card>{o.packages.length === 0 ? <Empty>Aucun colis ces 30 derniers jours.</Empty> :
       <div className="list">{o.packages.map((p) => <div key={p.code} className="line"><span className="mono">{p.code}</span>
         <span className="grow small muted">Cde {p.order_short} · {p.zone ?? ''} · {ago(p.updated_at)}</span>{p.attempts > 0 && <Badge kind="todo">{p.attempts} échec(s)</Badge>}<StatusBadge s={p.status} /></div>)}</div>}</Card>}
     {tab === 'products' && <Products />}
     {tab === 'commitment' && <Commitment />}
     {tab === 'payouts' && <Payouts />}
+    {tab === 'dropoff' && <Dropoff />}
     {tab === 'lots' && <Card><ErrorBox error={lots.error} />{!lots.data?.length ? <Empty>Aucun de vos lots ne périme dans les 30 prochains jours.</Empty> :
       <div className="list">{lots.data.map((l) => <div key={l.id} className="line"><span className={`dot ${l.state === 'expired' ? 'bad' : 'todo'}`} />
         <span className="grow"><b>{l.product}</b><div className="small muted">{l.lot ? `lot ${l.lot}` : 'sans n° de lot'} · {l.qty} unité(s) à l'entrepôt</div></span>
@@ -128,4 +129,23 @@ function Payouts() {
   const to = range === 'prev' ? day(new Date(now.getFullYear(), now.getMonth(), 0)) : day(now);
   return <div className="stack"><Chips options={[['week', '7 jours'], ['month', 'Ce mois'], ['prev', 'Mois dernier']]} value={range} onChange={setRange} />
     <VendorStatement from={from} to={to} /></div>;
+}
+
+// Dépôt au hub (P2) : apporter soi-même ses colis prêts, sur un créneau réservé
+function Dropoff() {
+  const { data: d, error, loading, reload } = useRpc('lg_dropoff_available', { p_days: 6 });
+  const [run, busy] = useAction();
+  if (loading && !d) return <Loading />;
+  if (error) return <ErrorBox error={error} />;
+  const when = (x) => `${new Date(x.day + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })} · ${x.start.slice(0, 5)}–${x.end.slice(0, 5)}`;
+  return <div className="stack">
+    <Card><h3>Mes colis prêts : {d.ready_packages}</h3>
+      {d.booking ? <><div className="flash ok"><div>Dépôt prévu <b>{when(d.booking)}</b> au {d.booking.hub} · {d.booking.packages} colis</div></div>
+        <div className="row" style={{ marginTop: 8 }}><Btn kind="ghost" disabled={busy} onClick={() => run(async () => { const r = await rpc('lg_dropoff_cancel', { p_booking: d.booking.id }); reload(); return r; }, { ok: 'Dépôt annulé : un chauffeur viendra collecter' })}>Annuler le dépôt</Btn></div></>
+        : <p className="small muted" style={{ margin: 0 }}>Sans dépôt prévu, un chauffeur passe collecter vos colis prêts. Vous pouvez aussi les apporter vous-même au hub.</p>}</Card>
+    <Card><h3>Créneaux disponibles</h3>{!d.slots.length ? <Empty>Aucun créneau ouvert pour l'instant.</Empty> :
+      <div className="list">{d.slots.map((s) => <div key={s.id} className="line"><span className="grow">{when(s)}<div className="small muted">{s.hub} · {s.left} place(s)</div></span>
+        <Btn size="sm" kind="primary" disabled={busy || !d.ready_packages} onClick={() => run(async () => { const r = await rpc('lg_dropoff_book', { p_slot: s.id }); reload(); return r; }, { ok: 'Dépôt réservé' })}>{d.booking ? 'Choisir plutôt' : 'Réserver'}</Btn></div>)}</div>}
+      {!d.ready_packages && <p className="small muted">Préparez et posez d'abord vos colis « prêts » pour réserver un dépôt.</p>}</Card>
+  </div>;
 }

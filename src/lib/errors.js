@@ -118,6 +118,11 @@ const M = {
   unknown_surcharge: 'Supplément inconnu.',
   invalid_code: 'Code invalide (lettres minuscules et _).',
   unknown_vendor: 'Vendeur inconnu.',
+  nothing_to_drop: 'Aucun colis prêt à déposer.',
+  not_at_vendor: 'Ce colis n\'est pas chez le vendeur (déjà reçu ou pas prêt).',
+  in_pickup_trip: 'Ce colis est déjà prévu dans une collecte : retirez-le du voyage d\'abord.',
+  unknown_booking: 'Réservation inconnue.',
+  vendor_required: 'Choisissez un vendeur.',
 };
 
 export function errText(e) {

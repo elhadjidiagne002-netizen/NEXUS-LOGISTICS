@@ -64,6 +64,7 @@ declare
     'lg_order_insure', 'lg_track_incidents', 'lg_track_incident_answer',
     'lg_device_ping', 'lg_devices_list', 'lg_device_revoke', 'lg_device_block',
     'lg_vendor_statement', 'lg_vendor_statements',
+    'lg_dropoff_slots_create', 'lg_dropoff_available', 'lg_dropoff_book', 'lg_dropoff_cancel', 'lg_dropoff_receive', 'lg_dropoffs_today',
     -- chauffeur
     'lg_trip_start', 'lg_my_day', 'lg_stop_call', 'lg_stop_arrive', 'lg_deliver', 'lg_fail', 'lg_trip_finish',
     'lg_driver_ping', 'lg_sos', 'lg_add_expense', 'lg_vehicle_check',

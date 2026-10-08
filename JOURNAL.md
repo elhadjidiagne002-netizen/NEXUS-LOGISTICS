@@ -2,6 +2,18 @@
 
 Le plus récent en premier.
 
+## 08/10/2026 — Cycle 17 : dépôt par le vendeur au hub (module 09, P2)
+- **Créneaux de dépôt** ouverts par le chef de quai (`lg_dropoff_slots_create` : à partir du, n jours,
+  plages, vendeurs par créneau ; Quai → Réception → « Créneaux »).
+- **Réservation par le vendeur** (`lg_dropoff_available`, `lg_dropoff_book`, `lg_dropoff_cancel` ;
+  espace vendeur → « Dépôt au hub ») pour ses colis prêts chez lui ; un seul dépôt prévu à la fois.
+- Tant qu'un dépôt est prévu, le vendeur **n'est plus proposé à la collecte** (`lg_pickups_pending`).
+- **Au hub** : le scan de « Réception au hub » bascule tout seul sur `lg_dropoff_receive` quand le colis
+  est encore « chez le vendeur » (pas de voyage) : colis au hub, pesée, réservation du jour « arrivée »
+  avec le nombre reçu. Un colis déjà prévu dans une collecte est refusé (`in_pickup_trip`).
+- Liste des dépôts du jour (attendu, en retard, arrivé) à côté de la réception.
+- Tests : 91/91.
+
 ## 08/10/2026 — Cycle 16 : relevé de reversement des vendeurs (module 08, P2)
 - `lg_vendor_statement(du, au, vendeur)` — **indicatif, lecture seule** (le versement réel reste dans
   `payout_requests`, flux NEXUS) : produits réellement livrés (`lg_order_goods_fcfa` : ruptures et
