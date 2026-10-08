@@ -23,8 +23,8 @@ function DockHome() {
   const [tab, setTab] = useState('trips');
   return <>
     <PageHead title="Quai" back="/" />
-    <Tabs value={tab} onChange={setTab} tabs={[['trips', 'Voyages'], ['staged', 'Colis à quai'], ['inbound', 'Collectes et reprises'], ['receive', 'Réception'], ['returns', 'Retours']]} />
-    {tab === 'trips' && <Trips />}{tab === 'staged' && <Staged />}{tab === 'returns' && <Returns />}
+    <Tabs value={tab} onChange={setTab} tabs={[['trips', 'Voyages'], ['docks', 'Quais'], ['staged', 'Colis à quai'], ['inbound', 'Collectes et reprises'], ['receive', 'Réception'], ['returns', 'Retours']]} />
+    {tab === 'trips' && <Trips />}{tab === 'docks' && <Docks />}{tab === 'staged' && <Staged />}{tab === 'returns' && <Returns />}
     {tab === 'inbound' && <Inbound />}{tab === 'receive' && <Receive />}
   </>;
 }
@@ -306,4 +306,51 @@ function Receive() {
           <Btn size="sm" kind="todo" onClick={() => run(async () => { const x = await act('lg_return_vendor', { p_code: last.code, p_reason: 'Retour client' }, 'Retour vendeur'); setLast(null); return x; }, { ok: 'Rendu au vendeur, stock rétabli, avoir émis' })}>Rendre au vendeur</Btn></div></>}
     </div></div>}
   </Card>;
+}
+
+// Plusieurs quais (P2) : qui charge où, véhicules en attente, temps moyens
+function Docks() {
+  const { data: b, error, loading, reload } = useRpc('lg_dock_board', {}, { refresh: 20000 });
+  const [pick, setPick] = useState(null);
+  const [form, setForm] = useState(null);
+  const [run, busy] = useAction();
+  const me = useMe();
+  if (loading && !b) return <Loading />;
+  if (error) return <ErrorBox error={error} />;
+  const free = b.docks.filter((k) => k.active && !k.trip);
+  const assign = (trip, dock) => run(async () => { const r = await rpc('lg_dock_assign', { p_trip: trip, p_dock: dock }); setPick(null); reload(); return r; },
+    { ok: 'Quai affecté' });
+  const checkin = (trip) => run(async () => { const r = await rpc('lg_dock_checkin', { p_trip: trip }); reload(); return r; }, { ok: 'Arrivée enregistrée' });
+  return <div className="stack">
+    <div className="row between"><span className="small muted">{free.length} quai(s) libre(s) · attente moyenne avant quai (7 j) : {b.avg_wait_min != null ? `${b.avg_wait_min} min` : '—'}</span>
+      {me?.roles?.some((r) => r.role === 'dock_chief') || me?.is_admin ? <Btn size="sm" onClick={() => setForm({ code: '', label: '' })}><Icon name="plus" size={16} />Quai</Btn> : null}</div>
+    {!b.docks.length ? <Card><Empty icon="truck">Aucun quai déclaré. Ajoutez-en un (Q1, Q2…).</Empty></Card> :
+      <div className="grid cols-3">{b.docks.map((k) => <Card key={k.id} kind={k.trip ? 'todo' : 'ok'}>
+        <div className="row between"><h3 style={{ margin: 0 }}>{k.code}</h3><Badge kind={k.trip ? 'todo' : 'ok'}>{k.trip ? 'occupé' : 'libre'}</Badge></div>
+        <div className="small muted">{k.label ?? ''}</div>
+        {k.trip ? <div style={{ marginTop: 8 }}><b>Voyage n° {k.trip.number}</b> · {k.trip.vehicle}<div className="small muted">{k.trip.courier ?? '—'} · <StatusBadge s={k.trip.status} />{k.trip.planned_departure ? ` · départ ${hhmm(k.trip.planned_departure)}` : ''}</div>
+          {k.trip.packages > 0 && <Gauge label="chargés" pct={Math.round(100 * k.trip.loaded / k.trip.packages)} detail={`${k.trip.loaded}/${k.trip.packages}`} />}
+          {!k.trip.arrived && <div className="small" style={{ color: 'var(--todo)', marginTop: 6 }}>véhicule pas encore signalé au hub</div>}</div>
+          : <div className="small muted" style={{ marginTop: 8 }}>{k.trips_7d} voyage(s) en 7 j</div>}
+        <div className="small muted" style={{ marginTop: 6 }}>chargement moyen : {k.avg_loading_min != null ? `${k.avg_loading_min} min` : '—'}</div></Card>)}</div>}
+    <div className="grid cols-2">
+      <Card><h3>File d'attente ({b.queue.length})</h3>{!b.queue.length ? <Empty icon="check">Aucun véhicule en attente.</Empty> :
+        <div className="list">{b.queue.map((q, i) => <div key={q.trip_id} className="line"><b>{i + 1}</b>
+          <span className="grow">Voyage n° {q.number} · {q.vehicle}<div className="small muted">{q.courier ?? '—'} · attend depuis {q.waiting_min} min</div></span>
+          <Btn size="sm" kind="primary" disabled={busy || !free.length} onClick={() => setPick(q)}>Affecter</Btn></div>)}</div>}</Card>
+      <Card><h3>À venir ({b.upcoming.length})</h3>{!b.upcoming.length ? <Empty icon="truck">Rien d'autre aujourd'hui.</Empty> :
+        <div className="list">{b.upcoming.map((u) => <div key={u.trip_id} className="line">
+          <span className="grow">Voyage n° {u.number} · {u.vehicle}<div className="small muted">{u.courier ?? '—'}{u.planned_departure ? ` · départ ${hhmm(u.planned_departure)}` : ''}</div></span>
+          <Btn size="sm" disabled={busy} onClick={() => checkin(u.trip_id)}>Arrivé</Btn>
+          <Btn size="sm" disabled={busy || !free.length} onClick={() => setPick(u)}>Affecter</Btn></div>)}</div>}</Card>
+    </div>
+    {pick && <Modal title={`Quai pour le voyage n° ${pick.number}`} onClose={() => setPick(null)}><div className="stack">
+      <div className="row">{free.map((k) => <Btn key={k.id} kind="primary" size="xl" disabled={busy} onClick={() => assign(pick.trip_id, k.id)}>{k.code}</Btn>)}</div>
+      <p className="small muted">Le chauffeur voit le quai dans son application. Le quai se libère au départ du voyage.</p></div></Modal>}
+    {form && <Modal title="Nouveau quai" onClose={() => setForm(null)}><div className="stack">
+      <Field label="Code"><input className="input mono" value={form.code} placeholder="Q4" onChange={(e) => setForm({ ...form, code: e.target.value })} /></Field>
+      <Field label="Libellé"><input className="input" value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} /></Field>
+      <Btn kind="primary" disabled={!form.code || busy} onClick={() => run(async () => { const r = await rpc('lg_dock_upsert', { p: form }); setForm(null); reload(); return r; }, { ok: 'Quai créé' })}>Créer</Btn>
+    </div></Modal>}
+  </div>;
 }

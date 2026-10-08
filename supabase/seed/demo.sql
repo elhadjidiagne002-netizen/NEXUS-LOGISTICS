@@ -92,3 +92,10 @@ insert into public.lg_product_locations (product_id, location_id, qty) values
  ('44000000-0000-4000-a000-000000000004','50000000-0000-4000-a000-000000000004',25),
  ('45000000-0000-4000-a000-000000000005','50000000-0000-4000-a000-000000000005',4)
 on conflict do nothing;
+
+-- Quais du hub (cycle 11)
+insert into public.lg_docks (id, hub_id, code, label) values
+ ('60000000-0000-4000-a000-000000000001','10000000-0000-4000-a000-000000000001','Q1','Grand quai (fourgonnettes)'),
+ ('60000000-0000-4000-a000-000000000002','10000000-0000-4000-a000-000000000001','Q2','Quai motos'),
+ ('60000000-0000-4000-a000-000000000003','10000000-0000-4000-a000-000000000001','Q3','Quai tricycles')
+on conflict do nothing;

@@ -2,6 +2,18 @@
 
 Le plus récent en premier.
 
+## 08/10/2026 — Cycle 11 : plusieurs quais (module 03, P2)
+- **Quais** (`lg_docks`, 3 en démo : Q1 fourgonnettes, Q2 motos, Q3 tricycles) ; création par le
+  chef de quai.
+- **File d'attente** : le chauffeur touche « Je suis arrivé au hub » (ou le chef de quai le note)
+  → `dock_queued_at` ; il voit sa place puis « Présentez-vous au quai Q2 » (`lg_trip_dock`).
+- **Affectation** (`lg_dock_assign`) : un quai = un voyage non parti à la fois ; sans quai précisé,
+  le premier libre. Le quai se libère tout seul au départ ou à l'annulation du voyage.
+- **Tableau** (`lg_dock_board`, Quai → Quais) : occupation et progression du chargement, file,
+  voyages à venir, **temps moyen de chargement par quai** (1er colis chargé → scellé) et **attente
+  moyenne avant quai** (7 jours).
+- Tests : 74/74.
+
 ## 08/10/2026 — Cycle 10 : offres — suppléments nuit et forte pluie (module 12, P2)
 - Express, programmé et « offerte au-delà de » existaient déjà dans `lg_quote`. Ajout de
   **suppléments** (`lg_surcharges`) **désactivés par défaut** : aucun prix ne change tant qu'on n'en

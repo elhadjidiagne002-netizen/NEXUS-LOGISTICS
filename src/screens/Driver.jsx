@@ -92,9 +92,9 @@ function Trip({ t, reload }) {
   const allDone = t.stops.length > 0 && next.length === 0 && !active;
 
   if (['planned', 'loading'].includes(t.status)) return <Card kind="todo"><div className="row between"><h3 style={{ margin: 0 }}>Voyage n° {t.number}</h3><StatusBadge s={t.status} /></div>
-    <p className="small">Chargement en cours au quai · départ prévu {hhmm(t.planned_departure)} · {t.stops.length} arrêt(s)</p></Card>;
+    <p className="small">Chargement en cours au quai · départ prévu {hhmm(t.planned_departure)} · {t.stops.length} arrêt(s)</p><DockInfo trip={t.id} /></Card>;
 
-  if (t.status === 'sealed') return <Card kind="todo"><h2>Prise en charge · voyage n° {t.number}</h2>
+  if (t.status === 'sealed') return <Card kind="todo"><h2>Prise en charge · voyage n° {t.number}</h2><DockInfo trip={t.id} />
     <p>{t.stops.length} arrêts · {t.stops.reduce((a, s) => a + s.packages.length, 0)} colis · à encaisser <b>{formatF(t.cod_expected_fcfa)}</b></p>
     <div className="list small">{t.stops.map((s) => <div key={s.id}>{s.seq}. {s.contact_name} — {s.packages.map((p) => p.code.slice(-6)).join(', ')}</div>)}</div>
     {!t.signed && <><p>Vérifiez le chargement puis signez : sans signature, pas de départ.</p><SignaturePad onChange={setSig} /></>}
@@ -364,4 +364,15 @@ export function speak(s) {
     if (voice) u.voice = voice;
     speechSynthesis.cancel(); speechSynthesis.speak(u);
   } catch { /* synthèse vocale indisponible */ }
+}
+
+// Quai : « je suis arrivé au hub », puis le quai affecté par le chef de quai
+function DockInfo({ trip }) {
+  const { data: d, reload } = useRpc('lg_trip_dock', { p_trip: trip }, { refresh: 20000 });
+  const [run, busy] = useAction();
+  if (!d) return null;
+  if (d.dock) return <div className="flash ok" style={{ margin: '8px 0' }}><Icon name="truck" /><div>Présentez-vous au <b className="big">quai {d.dock}</b></div></div>;
+  if (d.queued_at) return <div className="flash todo" style={{ margin: '8px 0' }}><Icon name="clock" /><div>En attente d'un quai{d.position ? ` · ${d.position === 1 ? 'prochain' : `${d.position}e dans la file`}` : ''}</div></div>;
+  return <Btn kind="primary" block disabled={busy} onClick={() => run(async () => { const r = await act('lg_dock_checkin', { p_trip: trip }, 'Arrivée au hub'); reload(); return r; },
+    { ok: 'Arrivée signalée' })}><Icon name="pin" size={18} />Je suis arrivé au hub</Btn>;
 }
