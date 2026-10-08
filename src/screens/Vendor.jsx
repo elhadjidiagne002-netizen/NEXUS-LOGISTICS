@@ -2,6 +2,7 @@
 // voir ses lots qui périment à l'entrepôt.
 import React, { useState } from 'react';
 import { rpc } from '../lib/backend.js';
+import { VendorStatement } from '../components/statement.jsx';
 import { useRpc, useAction, useNav, Btn, Card, Badge, Empty, Loading, ErrorBox, PageHead, Stat, Tabs, Chips, StatusBadge, HANDLING, ago } from '../components/ui.jsx';
 
 export default function Vendor() {
@@ -21,12 +22,13 @@ export default function Vendor() {
       <Stat label="taux de rupture (30 j)" value={o.stockout_pct_30d != null ? `${o.stockout_pct_30d} %` : '—'} kind={o.stockout_pct_30d > 5 ? 'bad' : ''} />
       <Stat label="fiches à compléter" value={o.products_missing_data} kind={o.products_missing_data ? 'todo' : 'ok'} />
     </div>
-    <div style={{ marginTop: 12 }}><Tabs value={tab} onChange={setTab} tabs={[['packages', 'Mes colis'], ['commitment', 'Mon engagement'], ['products', 'Fiches produit'], ['lots', `Péremption${lots.data?.length ? ` (${lots.data.length})` : ''}`]]} /></div>
+    <div style={{ marginTop: 12 }}><Tabs value={tab} onChange={setTab} tabs={[['packages', 'Mes colis'], ['commitment', 'Mon engagement'], ['payouts', 'Reversements'], ['products', 'Fiches produit'], ['lots', `Péremption${lots.data?.length ? ` (${lots.data.length})` : ''}`]]} /></div>
     {tab === 'packages' && <Card>{o.packages.length === 0 ? <Empty>Aucun colis ces 30 derniers jours.</Empty> :
       <div className="list">{o.packages.map((p) => <div key={p.code} className="line"><span className="mono">{p.code}</span>
         <span className="grow small muted">Cde {p.order_short} · {p.zone ?? ''} · {ago(p.updated_at)}</span>{p.attempts > 0 && <Badge kind="todo">{p.attempts} échec(s)</Badge>}<StatusBadge s={p.status} /></div>)}</div>}</Card>}
     {tab === 'products' && <Products />}
     {tab === 'commitment' && <Commitment />}
+    {tab === 'payouts' && <Payouts />}
     {tab === 'lots' && <Card><ErrorBox error={lots.error} />{!lots.data?.length ? <Empty>Aucun de vos lots ne périme dans les 30 prochains jours.</Empty> :
       <div className="list">{lots.data.map((l) => <div key={l.id} className="line"><span className={`dot ${l.state === 'expired' ? 'bad' : 'todo'}`} />
         <span className="grow"><b>{l.product}</b><div className="small muted">{l.lot ? `lot ${l.lot}` : 'sans n° de lot'} · {l.qty} unité(s) à l'entrepôt</div></span>
@@ -116,4 +118,14 @@ function Commitment() {
         <span className="grow small muted">{x.status === 'picking' ? 'en cours' : 'à faire'}</span>
         {x.minutes_left != null && <Badge kind={x.minutes_left < 0 ? 'bad' : x.minutes_left < 120 ? 'todo' : 'info'}>{left(x.minutes_left)}</Badge>}</div>)}</div>}</Card>
   </div>;
+}
+
+function Payouts() {
+  const [range, setRange] = useState('month');
+  const now = new Date(); const day = (d) => d.toLocaleDateString('en-CA', { timeZone: 'Africa/Dakar' });
+  const from = range === 'month' ? day(new Date(now.getFullYear(), now.getMonth(), 1)) : range === 'prev'
+    ? day(new Date(now.getFullYear(), now.getMonth() - 1, 1)) : day(new Date(Date.now() - 6 * 864e5));
+  const to = range === 'prev' ? day(new Date(now.getFullYear(), now.getMonth(), 0)) : day(now);
+  return <div className="stack"><Chips options={[['week', '7 jours'], ['month', 'Ce mois'], ['prev', 'Mois dernier']]} value={range} onChange={setRange} />
+    <VendorStatement from={from} to={to} /></div>;
 }

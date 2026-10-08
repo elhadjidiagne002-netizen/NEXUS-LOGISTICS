@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { rpc } from '../lib/backend.js';
 import { printInvoice } from '../lib/print.js';
 import { useMe, has } from '../App.jsx';
+import { VendorStatement } from '../components/statement.jsx';
 import { Icon, useRpc, useAction, useNav, Btn, Card, Badge, Empty, Loading, ErrorBox, PageHead, Modal, Field, formatF, dmy } from '../components/ui.jsx';
 
 const iso = (d) => d.toISOString().slice(0, 10);
@@ -48,6 +49,7 @@ export default function Billing({ invoiceId }) {
           <td className="mono">{i.number} {i.kind === 'credit_note' && <Badge kind="bad">avoir</Badge>}</td><td>{dmy(i.issued_at)}</td><td>{i.customer}</td>
           <td className="mono">{i.order_short}</td><td>{{ cod: 'livraison', mobile: 'mobile', card: 'carte' }[i.payment_method] ?? i.payment_method}</td>
           <td className="num">{formatF(i.ttc)}</td><td><Badge kind={i.status === 'paid' ? 'ok' : i.status === 'refunded' ? 'bad' : ''}>{i.status}</Badge></td></tr>)}</tbody></table></div></Card>}
+    {has(me, 'accountant') && <Payouts from={from} to={to} />}
     <Card kind="flat" style={{ marginTop: 12 }}><p className="small muted" style={{ margin: 0 }}>À trancher avec le comptable avant la première facture réelle (chapitre 11) :
       émetteur de la facture client (vendeur via NEXUS ou NEXUS), régime de TVA des vendeurs, calendrier de la facture électronique (DGID).</p></Card>
   </>;
@@ -96,4 +98,19 @@ function CreditModal({ inv, onClose, onDone }) {
         : { p_invoice: inv.id, p_lines: [], p_reason: reason, p_amount_fcfa: Number(amount) });
       onDone(); return r;
     }, { ok: 'Avoir émis' })}>Émettre l'avoir</Btn></div></Modal>;
+}
+
+// Reversements vendeurs (indicatifs) : net après commission et retenues, espèces rapprochées seulement
+function Payouts({ from, to }) {
+  const { data, error } = useRpc('lg_vendor_statements', { p_from: from, p_to: to });
+  const [open, setOpen] = useState(null);
+  return <Card style={{ marginTop: 12 }}><h3>Reversements vendeurs</h3><ErrorBox error={error} />
+    {!data ? <Loading /> : !data.length ? <Empty>Aucun vendeur livré sur la période.</Empty> :
+      <div className="scroll-x"><table className="tbl"><thead><tr><th>Vendeur</th><th className="num">Commandes</th><th className="num">Produits</th>
+        <th className="num">Commission</th><th className="num">Retenues</th><th className="num">Net reversable</th><th className="num">En attente</th></tr></thead>
+        <tbody>{data.map((v) => <tr key={v.vendor_id} style={{ cursor: 'pointer' }} onClick={() => setOpen(v)}><td>{v.vendor}</td><td className="num">{v.orders}</td>
+          <td className="num">{formatF(v.goods_fcfa)}</td><td className="num">{formatF(v.commission_fcfa)}</td><td className="num">{formatF(v.deductions_fcfa)}</td>
+          <td className="num"><b>{formatF(v.net_payable_fcfa)}</b></td><td className="num">{formatF(v.pending_fcfa)}</td></tr>)}</tbody></table></div>}
+    {open && <Modal title={`Relevé · ${open.vendor}`} onClose={() => setOpen(null)}><VendorStatement from={from} to={to} vendor={open.vendor_id} /></Modal>}
+  </Card>;
 }

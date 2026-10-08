@@ -29,7 +29,7 @@ Mode réel : copier `.env.example` en `.env` et renseigner `VITE_SUPABASE_URL` e
 npm test
 ```
 
-83 tests : parcours complet en SQL, droits réels sous les rôles `anon` et
+89 tests : parcours complet en SQL, droits réels sous les rôles `anon` et
 `authenticated`, scénario de démo, un fichier par cycle d'amélioration, algorithmes.
 
 ## Ce qui est construit
@@ -60,7 +60,7 @@ npm test
 | 4 | Entrepôt : emplacements, rangement, « où est ce produit ? », chemin de prélèvement, préparation par vague avec bacs, inventaire tournant à l'aveugle |
 | 5 | Prévision de volume et de véhicules (jours de pic) · détection d'anomalies · classement et prime de ponctualité des chauffeurs · contrôle des retours (remise en vente / vendeur / rebut) · livraison à un tiers |
 
-### Fonctions P2 ajoutées le 08/10/2026 (cycles 6 à 14)
+### Fonctions P2 ajoutées le 08/10/2026 (cycles 6 à 16)
 | Cycle | Contenu | Où |
 |---|---|---|
 | 6 | **Lots et péremption** : rangement par lot et date, prélèvement « premier périmé, premier sorti », sortie de stock motivée, **traçabilité pour rappel produit** (qui a reçu le lot X) ; lots du vendeur dans son espace | `/entrepot` → Péremption, `/vendeur` |
@@ -71,6 +71,8 @@ npm test
 | 11 | **Plusieurs quais** : arrivée du véhicule, file d'attente, affectation d'un quai, temps moyens de chargement et d'attente | `/quai` → Quais, app chauffeur |
 | 12 | **Tableaux par axe** (zone, vendeur, chauffeur, véhicule, jour, heure) et **export Excel** | `/analytique` → Indicateurs |
 | 13 | **Coûts** : par véhicule (au km, par colis), marge par zone, coût des échecs | `/analytique` → Coûts |
+| 15 | **Appareils** : liste des téléphones, déconnexion à distance, blocage d'un appareil perdu (appliqué côté serveur) | `/admin` → Appareils |
+| 16 | **Relevé de reversement vendeur** (indicatif) : produits livrés − commission − frais de retour ; espèces reversables après rapprochement | `/vendeur` → Reversements, `/factures` |
 | 14 | **Assurance colis** (prime au devis, plafond d'indemnisation), **avoir** de l'indemnité, **accord du client** depuis sa page de suivi | `/sav` → Incidents, `/suivi/:jeton` |
 
 Les montants proposés (frais par cause de retour, plafond sans assurance, prime, suppléments)

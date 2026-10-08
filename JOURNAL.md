@@ -2,6 +2,20 @@
 
 Le plus récent en premier.
 
+## 08/10/2026 — Cycle 16 : relevé de reversement des vendeurs (module 08, P2)
+- `lg_vendor_statement(du, au, vendeur)` — **indicatif, lecture seule** (le versement réel reste dans
+  `payout_requests`, flux NEXUS) : produits réellement livrés (`lg_order_goods_fcfa` : ruptures et
+  lignes annulées exclues, remise au prorata, sans frais de livraison) − commission
+  (`profiles.commission_rate`) − **frais de retour à la charge du vendeur** (cycle 8).
+- **Réglé** (`lg_order_settled`) : paiement en ligne payé ; en espèces, **seulement quand le voyage est
+  rapproché**. Défaut trouvé par le test : `payment_status` passe à « paid » dès l'encaissement par
+  le chauffeur — trop tôt pour reverser des espèces pas encore comptées.
+- Un vendeur ne voit que son relevé ; le comptable voit la synthèse (`lg_vendor_statements`) et le
+  détail par vendeur. Export Excel du relevé.
+- Écrans : espace vendeur → « Reversements » (7 jours, ce mois, mois dernier) ; Factures →
+  « Reversements vendeurs » (comptable). Cellules numériques des tableaux sans retour à la ligne.
+- Tests : 89/89.
+
 ## 08/10/2026 — Cycle 15 : appareils (module 15, P2)
 - L'app crée un **identifiant d'appareil** (une fois, `localStorage`) et l'envoie en en-tête
   `x-lg-device` (option `global.headers` de supabase-js) ; PostgREST le rend lisible en SQL
