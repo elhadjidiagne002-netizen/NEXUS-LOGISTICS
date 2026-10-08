@@ -154,7 +154,8 @@ export async function runScenario(rpc, query) {
       from generate_series(1, 28) g, lateral (select ((now() at time zone 'Africa/Dakar')::date - g) d) dd,
            lateral unnest(array['Rufisque', 'Pikine', 'Parcelles', 'Yoff', 'Mermoz', 'Médina', 'Guédiawaye']) z,
            lateral generate_series(1, case extract(dow from d) when 5 then 3 when 6 then 2 when 0 then 0 else 1 end) n`);
-  const friday = new Date(); friday.setDate(friday.getDate() + ((5 - friday.getDay() + 7) % 7 || 7));
+  // calendrier de Dakar (UTC+0, sans heure d'été) : jours UTC, quel que soit le fuseau du navigateur
+  const friday = new Date(); friday.setUTCDate(friday.getUTCDate() + ((5 - friday.getUTCDay() + 7) % 7 || 7));
   await rpc('lg_set_config', { p: { peak_days: [{ date: friday.toISOString().slice(0, 10), label: 'Louma du vendredi', factor: 1.5 }] } }, P.admin);
   return { orders: ids, trips: [tripA, tripB] };
 }

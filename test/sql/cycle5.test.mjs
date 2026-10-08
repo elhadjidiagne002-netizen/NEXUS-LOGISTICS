@@ -18,6 +18,8 @@ test('prévision : même jour des 4 dernières semaines pondéré, pic déclaré
     select 'delivered', 'paid', 'mobile', 10, 'Historique', 'Thiès', (now() at time zone 'Africa/Dakar')::date + 1 - w * 7 + time '10:00'
       from generate_series(1, 4) w, generate_series(1, 5) n`);
   const tomorrow = new Date(Date.now() + 864e5).toLocaleDateString('en-CA', { timeZone: 'Africa/Dakar' });
+  // la démo déclare un pic « Louma du vendredi » : sans cette remise à zéro, le test échoue chaque jeudi
+  await t.rpc(U.admin, 'lg_set_config', { p: { peak_days: [] } });
   let f = await t.rpc(U.dispatcher, 'lg_forecast', { p_days: 3 });
   const d1 = f.days.find((d) => d.date === tomorrow);
   const thies = (d) => Number(d.zones.find((z) => z.zone === 'Thiès')?.orders);
