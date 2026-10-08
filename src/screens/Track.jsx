@@ -15,7 +15,10 @@ export default function Track({ token }) {
   const [err, setErr] = useState(null);
   const [modal, setModal] = useState(null);
   const toast = useToast();
-  const load = async () => { try { setD(await call('lg_track', { p_token: token })); } catch (e) { setErr(e); } };
+  const [proposals, setProposals] = useState([]);
+  const load = async () => {
+    try { setD(await call('lg_track', { p_token: token })); setProposals(await call('lg_track_incidents', { p_token: token }).catch(() => [])); } catch (e) { setErr(e); }
+  };
   useEffect(() => { load(); const i = setInterval(() => document.visibilityState === 'visible' && load(), 20000); return () => clearInterval(i); }, [token]);
   const doit = async (name, args, ok) => {
     try { const r = await call(name, { p_token: token, ...args }); if (r.ok === false) toast(errText(r.error), 'bad'); else { toast(ok, 'ok'); setModal(null); load(); } }
@@ -48,6 +51,10 @@ export default function Track({ token }) {
     {del?.position && <div style={{ marginTop: 12 }}><MapView height={300} markers={[{ kind: 'truck', lat: del.position.lat, lng: del.position.lng, icon: '🛵' },
       ...(del.dest ? [{ lat: del.dest.lat, lng: del.dest.lng, label: '🏠', color: '#0b6e4f' }] : [])]} /></div>}
     <div className="stack" style={{ marginTop: 12 }}>
+      {proposals.map((p) => <Card key={p.id} kind="todo"><h3>Notre proposition</h3>
+        <p style={{ margin: '0 0 6px' }}>{p.resolution}</p>{p.compensation_fcfa > 0 && <p style={{ margin: '0 0 10px' }}>Indemnité : <b className="big">{formatF(p.compensation_fcfa)}</b></p>}
+        <div className="row"><Btn kind="ok" size="xl" style={{ flex: 1 }} onClick={() => doit('lg_track_incident_answer', { p_incident: p.id, p_accept: true }, 'Merci, c\'est accepté.')}>J'accepte</Btn>
+          <Btn kind="bad" onClick={() => doit('lg_track_incident_answer', { p_incident: p.id, p_accept: false }, 'Noté : le service client vous recontacte.')}>Je refuse</Btn></div></Card>)}
       {d.can_confirm && <Card kind="todo"><h3>Confirmez-vous votre commande ?</h3><p className="small">{formatF(d.amount_due_fcfa)} à payer à la livraison.</p>
         <div className="row"><Btn kind="ok" size="xl" style={{ flex: 1 }} onClick={() => doit('lg_track_confirm', { p_yes: true }, 'Merci ! Commande confirmée.')}>Oui, je confirme</Btn>
           <Btn kind="bad" onClick={() => confirm('Annuler la commande ?') && doit('lg_track_confirm', { p_yes: false }, 'Commande annulée')}>Annuler</Btn></div></Card>}

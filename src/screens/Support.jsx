@@ -65,25 +65,39 @@ function Incidents() {
         <div className="row between"><b>n° {i.number} · {INC[i.kind] ?? i.kind}</b><span><StatusBadge s={i.status} /> {i.overdue && <Badge kind="bad">hors délai</Badge>}</span></div>
         <div className="small">{i.description}</div>
         <div className="small muted">{i.package && <span className="mono">{i.package} · </span>}{i.trip_number ? `V${i.trip_number} · ` : ''}responsable au moment des faits : {i.responsible_type ?? '—'} · {ago(i.created_at)}</div>
-        {i.resolution && <div className="small">→ {i.resolution}{i.compensation_fcfa ? ` · indemnité ${formatF(i.compensation_fcfa)}` : ''}</div>}
-        {['open', 'investigating'].includes(i.status) && <Btn size="sm" onClick={() => setRes(i)}>Résoudre</Btn>}</Card>)}
+        {i.resolution && <div className="small">→ {i.resolution}{i.compensation_fcfa ? ` · indemnité ${formatF(i.compensation_fcfa)}` : ''}{i.credit_note ? ` · avoir ${i.credit_note}` : ''}</div>}
+        <div className="chips">{i.awaiting_customer && <Badge kind="todo">attend la réponse du client</Badge>}
+          {i.customer_agreed_at && <Badge kind="ok">accord du client{i.agreement_via === 'tracking' ? ' (page de suivi)' : ' (téléphone)'}</Badge>}
+          {i.customer_refused_at && i.status !== 'closed' && <Badge kind="bad">proposition refusée par le client</Badge>}
+          {i.insured_value_fcfa && <Badge kind="info">assuré {formatF(i.insured_value_fcfa)}</Badge>}</div>
+        {['open', 'investigating', 'resolved'].includes(i.status) && <Btn size="sm" onClick={() => setRes(i)}>{i.status === 'resolved' ? 'Reprendre' : 'Résoudre'}</Btn>}</Card>)}
     {res && <Resolve i={res} onClose={() => setRes(null)} onDone={() => { setRes(null); reload(); }} />}
     {create && <NewIncident onClose={() => setCreate(false)} onDone={() => { setCreate(false); reload(); }} />}
   </div>;
 }
 
 function Resolve({ i, onClose, onDone }) {
-  const [text, setText] = useState(''); const [comp, setComp] = useState(''); const [ded, setDed] = useState('');
+  const [text, setText] = useState(i.resolution ?? ''); const [comp, setComp] = useState(i.compensation_fcfa ? String(i.compensation_fcfa) : ''); const [ded, setDed] = useState('');
+  const [credit, setCredit] = useState(true); const [agreed, setAgreed] = useState(false);
   const [run, busy] = useAction();
+  const over = i.cap_fcfa != null && Number(comp) > i.cap_fcfa;
   return <Modal title={`Incident n° ${i.number}`} onClose={onClose}><div className="stack">
     <p>{i.description}</p>
     <Field label="Décision"><textarea className="input" value={text} onChange={(e) => setText(e.target.value)} /></Field>
     <div className="grid cols-2"><Field label="Indemnisation client (F)"><input className="input" inputMode="numeric" value={comp} onChange={(e) => setComp(e.target.value.replace(/\D/g, ''))} /></Field>
       {i.responsible_type === 'driver' && <Field label="Retenue chauffeur (F)"><input className="input" inputMode="numeric" value={ded} onChange={(e) => setDed(e.target.value.replace(/\D/g, ''))} /></Field>}</div>
+    {i.cap_fcfa != null && <div className={`small ${over ? '' : 'muted'}`} style={over ? { color: 'var(--bad)' } : undefined}>Plafond d'indemnisation : <b>{formatF(i.cap_fcfa)}</b>
+      {i.insured_value_fcfa ? ' (valeur assurée)' : ' (colis non assuré : valeur des produits, plafonnée)'}</div>}
+    {Number(comp) > 0 && i.has_order && <div className="stack" style={{ gap: 6 }}>
+      <label className="row small"><input type="checkbox" checked={credit} onChange={(e) => setCredit(e.target.checked)} /> Émettre un avoir de ce montant sur la facture</label>
+      <label className="row small"><input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} /> Le client a donné son accord (par téléphone)</label>
+      {!agreed && <p className="small muted" style={{ margin: 0 }}>Sans accord, la proposition lui est envoyée par WhatsApp : il accepte ou refuse depuis sa page de suivi.</p>}</div>}
     {i.kind === 'cash_gap' && <p className="small muted">Clore l'écart permet le rapprochement du voyage et le calcul des gains.</p>}
-    <Btn kind="primary" size="xl" disabled={!text.trim() || busy} onClick={() => run(async () => {
-      const r = await rpc('lg_resolve_incident', { p_id: i.id, p_resolution: text, p_compensation_fcfa: Number(comp) || 0, p_deduction_fcfa: Number(ded) || 0 }); onDone(); return r;
-    }, { ok: 'Incident clos' })}>Clore</Btn></div></Modal>;
+    <Btn kind="primary" size="xl" disabled={!text.trim() || busy || over} onClick={() => run(async () => {
+      const r = await rpc('lg_resolve_incident', { p_id: i.id, p_resolution: text, p_compensation_fcfa: Number(comp) || 0, p_deduction_fcfa: Number(ded) || 0,
+        p_credit_note: credit && Number(comp) > 0, p_customer_agreed: agreed });
+      if (r.ok) onDone(); return r;
+    }, { ok: 'Décision enregistrée' })}>{Number(comp) > 0 && i.has_order && !agreed ? 'Proposer au client' : 'Clore'}</Btn></div></Modal>;
 }
 
 function NewIncident({ onClose, onDone }) {

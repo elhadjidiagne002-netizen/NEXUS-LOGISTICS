@@ -23,9 +23,11 @@ test('aucune fonction lg_ interne n\'est exécutable par anon ou authenticated',
     from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname like 'lg\\_%'`);
   const anonOk = rows.filter((r) => r.anon).map((r) => r.proname).sort();
   assert.deepEqual(anonOk, ['lg_quote', 'lg_slots_available', 'lg_track', 'lg_track_book_slot', 'lg_track_confirm',
-    'lg_track_invoice', 'lg_track_rate', 'lg_track_request', 'lg_track_set_location', 'lg_track_third_party']);
+    'lg_track_incident_answer', 'lg_track_incidents', 'lg_track_invoice', 'lg_track_rate', 'lg_track_request',
+    'lg_track_set_location', 'lg_track_third_party']);
   for (const internal of ['lg_notify', 'lg_idem_put', 'lg_issue_invoice', 'lg_credit_note', 'lg_raise_alert',
-    'lg_try_reconcile', 'lg_confirm_cod_internal', 'lg_handle_reply', 'lg_watchdog', 'lg_issue_delivery_code', 'lg_audit']) {
+    'lg_try_reconcile', 'lg_confirm_cod_internal', 'lg_handle_reply', 'lg_watchdog', 'lg_issue_delivery_code', 'lg_audit',
+    'lg_vendor_reminders', 'lg_incident_cap', 'lg_insurance_fee', 'lg_surcharges_now', 'lg_return_suggest', 'lg_lot_hint']) {
     assert.equal(rows.find((r) => r.proname === internal).auth, false, internal);
   }
 });

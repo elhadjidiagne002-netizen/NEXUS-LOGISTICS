@@ -195,7 +195,9 @@ const CFG = [['max_attempts', 'Présentations avant retour vendeur'], ['proof_ra
   ['otp_attempts', 'Essais du code client'], ['staged_max_hours', 'Alerte colis à quai (h)'], ['stop_max_minutes', 'Alerte arrêt long (min)'],
   ['pay_per_package', 'Prime par colis livré (F)'], ['bonus_zero_failure', 'Bonus zéro échec (F)'], ['manager_phone', 'WhatsApp du gérant (rapport du soir)'],
   ['bonus_on_time', 'Prime par livraison à l\'heure (F)'], ['double_check_fcfa', 'Double contrôle au-delà de (F)'],
-  ['tracking_base_url', 'Adresse de la page de suivi']];
+  ['tracking_base_url', 'Adresse de la page de suivi'], ['expiry_alert_days', 'Alerte péremption (jours avant la date)'],
+  ['insurance_rate_pct', 'Assurance : prime (% de la valeur déclarée)'], ['insurance_min_fcfa', 'Assurance : prime minimale (F)'],
+  ['insurance_max_value_fcfa', 'Assurance : valeur maximale assurable (F)'], ['uninsured_cap_fcfa', 'Plafond d\'indemnisation sans assurance (F)']];
 function Config() {
   const { data } = useRpc('lg_pricing', {});
   const [f, setF] = useState(null);

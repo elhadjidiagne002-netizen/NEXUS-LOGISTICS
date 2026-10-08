@@ -2,6 +2,23 @@
 
 Le plus récent en premier.
 
+## 08/10/2026 — Cycle 14 : assurance colis et résolution des incidents (module 13, P2)
+- **Assurance** : `lg_quote` accepte une valeur déclarée (`p_declared_value_fcfa`) et renvoie la
+  prime (`insurance_fee_fcfa`, 2 % · 300 F minimum · 1 000 000 F assurables au plus — réglables) et
+  `total_fcfa`. Colonnes `orders.insured_value_fcfa` / `insurance_fee_fcfa` (le site les renseigne
+  au paiement) ; `lg_order_insure` pour une commande prise par téléphone, tant que rien n'est chargé.
+- **Plafond d'indemnisation** (`lg_incident_cap`) : valeur assurée ; sinon valeur des produits
+  plafonnée à `uninsured_cap_fcfa` (50 000 F proposé, **à valider**). Au-delà : `over_cap`.
+- **Résolution** (`lg_resolve_incident`, nouvelle signature) : **avoir** de l'indemnité sur la facture
+  (une seule fois), et **clôture avec l'accord du client** — coché par le service client (téléphone),
+  sinon la proposition part par WhatsApp (modèle `lg_incident_proposal`) et le client **accepte ou
+  refuse depuis sa page de suivi** (`lg_track_incidents`, `lg_track_incident_answer`, ouvertes à
+  anon par le lien secret ; un refus rouvre l'incident).
+- Réglages admin : alerte péremption, paramètres d'assurance, plafond sans assurance.
+- `test/sql/droits.test.mjs` : 2 fonctions publiques de plus (attendu), et les nouvelles fonctions
+  internes vérifiées fermées.
+- Tests : 83/83.
+
 ## 08/10/2026 — Cycle 13 : coûts (modules 10 et 14, P2)
 - `lg_costs(du, au)` (répartiteur, comptable) : coûts = dépenses de voyage non rejetées + entretien
   du carnet + rémunération des chauffeurs ; recettes = frais de livraison des commandes livrées.

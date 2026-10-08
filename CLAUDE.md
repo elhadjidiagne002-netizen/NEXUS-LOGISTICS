@@ -73,8 +73,8 @@ base Supabase** (projet `pqcqbstbdujzaclsiosv`). Toute la logique métier est en
     un fichier de script.
 
 ## Tests
-- `npm test` : 78 tests (PGlite = Postgres 18 en WebAssembly, pgcrypto inclus), dont un
-  fichier par cycle (`test/sql/cycle1..13.test.mjs`) qui part de la journée de démo.
+- `npm test` : 83 tests (PGlite = Postgres 18 en WebAssembly, pgcrypto inclus), dont un
+  fichier par cycle (`test/sql/cycle1..14.test.mjs`) qui part de la journée de démo.
 - `test/helpers/db.mjs` : `createDb()` charge le miroir + migrations + données ;
   `rpc(uid, nom, args)` appelle comme `supabase.rpc` sous l'identité `uid`.
 - Le miroir `supabase/stub/prod_subset.sql` a été relevé **en lecture seule** sur la prod
@@ -87,7 +87,10 @@ base Supabase** (projet `pqcqbstbdujzaclsiosv`). Toute la logique métier est en
    `select public.lg_backfill_order_items();` (reprise des 53 commandes), rejouer une journée.
 2. Décisions à trancher avant (chapitre 14) : lieu de préparation (le code gère vendeur ET
    hub), sort des 22 commandes « en préparation » depuis l'été, émetteur de la facture
-   (réglage `invoice_issuer`), nombre de présentations (`max_attempts`).
+   (réglage `invoice_issuer`), nombre de présentations (`max_attempts`). Valeurs proposées à
+   valider (cycles 6 à 14) : qui paie chaque cause de retour (`lg_return_causes`), plafond
+   d'indemnisation sans assurance (`uninsured_cap_fcfa`), prime d'assurance, montants des
+   suppléments nuit/pluie (désactivés par défaut).
 3. Brancher : envoi des événements `lg_*` de `notification_outbox` (modèles WhatsApp de
    l'annexe B à ajouter côté `functions/api/_lib/notify.js` de NEXUS) ; `lg_handle_reply`
    dans le webhook WhatsApp entrant ; `lg_watchdog()` et `lg_vendor_reminders()` (toutes les 5 min) et `lg_purge()`
