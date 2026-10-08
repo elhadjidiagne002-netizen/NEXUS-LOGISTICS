@@ -2,6 +2,16 @@
 
 Le plus récent en premier.
 
+## 08/10/2026 — Cycle 13 : coûts (modules 10 et 14, P2)
+- `lg_costs(du, au)` (répartiteur, comptable) : coûts = dépenses de voyage non rejetées + entretien
+  du carnet + rémunération des chauffeurs ; recettes = frais de livraison des commandes livrées.
+  **Totaux** (coût par présentation, par livraison, au km, **coût des échecs**, marge), **par
+  véhicule** (km, remplissage, coût au km et par colis), **marge par zone**.
+- Répartitions assumées et écrites à l'écran : paie d'un chauffeur au prorata de ses livraisons par
+  véhicule ; coût total aux zones au prorata des présentations (à affiner avec le km par arrêt).
+- Pilotage → « Coûts ». Démo : le chauffeur saisit un plein de 6 000 F au départ.
+- Tests : 78/78.
+
 ## 08/10/2026 — Cycle 12 : tableaux par axe et export Excel (module 14, P2)
 - `lg_kpis_by_axis(axe, du, au)` : présentations, livrés, échecs, taux d'échec, 1re présentation,
   ponctualité, délai de bout en bout, **par zone, vendeur, chauffeur, véhicule, jour de la semaine

@@ -12,8 +12,8 @@ export default function Analytics() {
   const [tab, setTab] = useState('kpis');
   return <>
     <PageHead title="Pilotage" back="/" sub="Mesurer ce qui coûte et ce qui fâche, anticiper la charge, repérer les dérives." />
-    <Tabs value={tab} onChange={setTab} tabs={[['kpis', 'Indicateurs'], ['forecast', 'Prévision'], ['anomalies', 'Anomalies'], ['drivers', 'Chauffeurs'], ['picking', 'Préparation'], ['returns', 'Retours'], ['vendors', 'Vendeurs']]} />
-    {tab === 'kpis' && <Kpis />}{tab === 'forecast' && <Forecast />}{tab === 'anomalies' && <Anomalies />}{tab === 'drivers' && <Leaderboard />}{tab === 'picking' && <PickProductivity />}{tab === 'returns' && <ReturnStats />}{tab === 'vendors' && <VendorCommitments />}
+    <Tabs value={tab} onChange={setTab} tabs={[['kpis', 'Indicateurs'], ['forecast', 'Prévision'], ['anomalies', 'Anomalies'], ['drivers', 'Chauffeurs'], ['picking', 'Préparation'], ['costs', 'Coûts'], ['returns', 'Retours'], ['vendors', 'Vendeurs']]} />
+    {tab === 'kpis' && <Kpis />}{tab === 'forecast' && <Forecast />}{tab === 'anomalies' && <Anomalies />}{tab === 'drivers' && <Leaderboard />}{tab === 'picking' && <PickProductivity />}{tab === 'returns' && <ReturnStats />}{tab === 'vendors' && <VendorCommitments />}{tab === 'costs' && <Costs />}
   </>;
 }
 
@@ -209,5 +209,43 @@ function VendorCommitments() {
         <td className="num">{v.avg_hours != null ? `${v.avg_hours} h` : '—'}</td><td className="num">{v.open} · <b style={{ color: v.open_late ? 'var(--bad)' : undefined }}>{v.open_late}</b></td>
         <td className="num">{v.reminders}</td></tr>)}</tbody></table></div></Card>
     <p className="small muted">Le vendeur fixe son délai dans son espace (ou le chef de quai pour lui). « À l'heure » : commande prête avant l'heure limite.</p>
+  </div>;
+}
+
+// Coûts (P2) : coût au km et par colis par véhicule, marge par zone, coût des échecs
+function Costs() {
+  const [range, setRange] = useState('30');
+  const to = new Date(); const from = new Date(Date.now() - (Number(range) - 1) * 864e5);
+  const { data, error, loading } = useRpc('lg_costs', { p_from: iso(from), p_to: iso(to) });
+  const k = data?.totals;
+  const F = (v) => (v == null ? '—' : formatF(v));
+  return <div className="stack">
+    <Chips options={[['7', '7 jours'], ['30', '30 jours'], ['90', '90 jours']]} value={range} onChange={setRange} />
+    <ErrorBox error={error} />
+    {loading && !data ? <Loading /> : data && <>
+      <div className="stats">
+        <Stat icon="cash" c="#d97706" label="coûts de la période" value={F(k.cost_fcfa)} />
+        <Stat icon="receipt" c="#059669" label="frais de livraison encaissés" value={F(k.revenue_fcfa)} />
+        <Stat icon="chart" label="marge livraison" value={F(k.margin_fcfa)} kind={k.margin_fcfa < 0 ? 'bad' : 'ok'} />
+        <Stat icon="box" label="coût par livraison" value={F(k.cost_per_delivery_fcfa)} />
+        <Stat icon="route" label="coût au km" value={F(k.cost_per_km_fcfa)} />
+        <Stat icon="x" c="#dc2626" label={`coût des échecs (${k.failed})`} value={F(k.failure_cost_fcfa)} kind={k.failure_cost_fcfa ? 'bad' : ''} />
+      </div>
+      <p className="small muted" style={{ margin: 0 }}>Coûts = dépenses de voyage ({F(k.expenses_fcfa)}) + entretien ({F(k.maintenance_fcfa)}) + rémunération des chauffeurs ({F(k.driver_pay_fcfa)}).</p>
+      <Card><h3>Par véhicule</h3>{!data.by_vehicle.length ? <Empty icon="truck">Aucun voyage sur la période.</Empty> :
+        <div className="scroll-x"><table className="tbl"><thead><tr><th>Véhicule</th><th className="num">Voyages</th><th className="num">Km</th><th className="num">Remplissage</th>
+          <th className="num">Livrés</th><th className="num">Coût</th><th className="num">Au km</th><th className="num">Par colis</th></tr></thead>
+          <tbody>{data.by_vehicle.map((v) => <tr key={v.vehicle_id}><td>{v.plate} <span className="small muted">{v.kind}</span></td><td className="num">{v.trips}</td>
+            <td className="num">{v.km}</td><td className="num">{v.fill_pct != null ? `${v.fill_pct} %` : '—'}</td><td className="num">{v.delivered}</td>
+            <td className="num">{F(v.cost_fcfa)}</td><td className="num">{F(v.cost_per_km_fcfa)}</td><td className="num"><b>{F(v.cost_per_package_fcfa)}</b></td></tr>)}</tbody></table></div>}
+        <p className="small muted">La paie d'un chauffeur est répartie sur ses véhicules au prorata de ses livraisons.</p></Card>
+      <Card><h3>Marge par zone</h3>{!data.by_zone.length ? <Empty icon="map">Aucune présentation sur la période.</Empty> :
+        <div className="scroll-x"><table className="tbl"><thead><tr><th>Zone</th><th className="num">Présentations</th><th className="num">Échecs</th>
+          <th className="num">Recettes</th><th className="num">Coût réparti</th><th className="num">Marge</th><th className="num">Coût des échecs</th></tr></thead>
+          <tbody>{data.by_zone.map((z) => <tr key={z.zone}><td>{z.zone}</td><td className="num">{z.presentations}</td><td className="num">{z.failed}</td>
+            <td className="num">{F(z.revenue_fcfa)}</td><td className="num">{F(z.cost_fcfa)}</td>
+            <td className="num" style={{ color: z.margin_fcfa < 0 ? 'var(--bad)' : 'var(--ok)' }}><b>{F(z.margin_fcfa)}</b></td><td className="num">{F(z.failure_cost_fcfa)}</td></tr>)}</tbody></table></div>}
+        <p className="small muted">Coût réparti au prorata des présentations : une zone lointaine coûte en réalité davantage par présentation. À affiner avec le kilométrage par arrêt.</p></Card>
+    </>}
   </div>;
 }

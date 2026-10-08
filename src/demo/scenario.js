@@ -115,6 +115,8 @@ export async function runScenario(rpc, query) {
   await rpc('lg_vehicle_check', { p_vehicle: VAN, p_checklist: { pneus: true, freins: true, feux: true, carburant: true, documents: true, caisson: true }, p_odometer_km: 48210, p_trip: tripA }, P.dock);
   await rpc('lg_trip_seal', { p_trip: tripA, p_signature_path: 'demo/signature-moussa.png' }, P.dock);
   await rpc('lg_trip_start', { p_trip: tripA, p_event: ev(), p_lat: 14.7065, p_lng: -17.4355 }, P.moussa);
+  // plein de carburant au départ (onglet Coûts du pilotage)
+  await rpc('lg_add_expense', { p_kind: 'carburant', p_amount_fcfa: 6000, p_note: 'Plein au départ' }, P.moussa);
   let day = await rpc('lg_my_day', {}, P.moussa);
   let stops = day.trips[0].stops;
   // arrêt 1 livré (code du client lu dans le message envoyé)
