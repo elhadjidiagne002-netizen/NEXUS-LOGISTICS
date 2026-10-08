@@ -2,6 +2,16 @@
 
 Le plus récent en premier.
 
+## 08/10/2026 — Cycle 20 : retour de tournée, écart signalé à la clôture (module 03, P2)
+- **Défaut** : l'alerte `not_scanned` était prévue dès le socle mais **jamais levée** ; un chauffeur pouvait
+  terminer sa tournée sans que personne ne voie les colis non livrés qu'il devait rapporter.
+- À la clôture d'un voyage (déclencheur, non bloquant), s'il reste des colis à rapporter
+  (`lg_trip_unreturned` : échecs pas rentrés, colis chargés jamais livrés), alerte dans la tour de contrôle
+  avec leurs codes ; elle **se lève toute seule** au scan du dernier colis (`lg_return_hub`, par une autre
+  personne que le chauffeur, comme avant).
+- Quai → Retours : carte « Attendus au quai » (voyage, chauffeur, codes, retard au-delà d'une heure, appel).
+- Tests : 98/98.
+
 ## 08/10/2026 — Cycle 19 : entretien préventif au kilométrage + indicateur « colis par heure »
 - **Défaut** : le carnet enregistrait « prochain entretien à N km » (`next_due_km`) sans que personne ne soit
   jamais prévenu. Désormais : **kilométrage estimé** (`lg_vehicle_km_estimate` = dernier relevé + km des

@@ -89,7 +89,19 @@ function Staged() {
 }
 
 function Returns() {
-  return <div className="split"><ReturnScan /><Inspect /></div>;
+  return <div className="split"><div className="stack"><Expected /><ReturnScan /></div><Inspect /></div>;
+}
+
+// Retour de tournée (P2) : colis non livrés que chaque chauffeur doit rapporter ; l'alerte se lève au dernier scan
+function Expected() {
+  const { data } = useRpc('lg_returns_expected', {}, { refresh: 20000 });
+  if (!data?.length) return null;
+  return <Card kind="todo"><h3>Attendus au quai</h3><div className="list">{data.map((x) => <div key={x.trip_id} className="line">
+    <span className="grow"><b>Voyage n° {x.number}</b> · {x.courier ?? '—'}
+      <div className="small muted">terminé il y a {x.minutes} min · {x.codes.length} colis : <span className="mono">{x.codes.join(', ')}</span></div></span>
+    {x.minutes > 60 && <Badge kind="bad">en retard</Badge>}
+    {x.phone && <a className="btn sm" href={`tel:${x.phone}`}><Icon name="phone" size={14} /></a>}</div>)}</div>
+    <p className="small muted" style={{ margin: '8px 0 0' }}>Scannez-les ci-dessous (une autre personne que le chauffeur). Un colis manquant reste signalé dans la tour de contrôle.</p></Card>;
 }
 
 // Contrôle du retour (P2) : état du produit, puis décision — remise en vente, retour vendeur ou rebut
