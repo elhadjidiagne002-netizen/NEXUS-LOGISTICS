@@ -21,3 +21,9 @@ migrations_dir = "migrations"
 # [[r2_buckets]]
 # binding = "PROOFS"
 # bucket_name = "nexus-logistics-preuves"
+
+# Secrets de la plateforme (jamais dans ce fichier) — à poser une fois :
+#   npx wrangler pages secret put CRON_SECRET  --project-name nexus-logistics   (tâches planifiées, voir cron/)
+#   npx wrangler pages secret put SECRETS_KEY  --project-name nexus-logistics   (chiffre les jetons WhatsApp des entreprises)
+#   npx wrangler pages secret put BREVO_API_KEY --project-name nexus-logistics  (e-mail de secours, facultatif)
+# Variable facultative : BREVO_SENDER (adresse d'expédition validée chez Brevo).

@@ -10,6 +10,7 @@ import { tripFor, isTripDriver, refreshStatement, etaStatements, etaOrigin, load
 import { alertStatement, maintenanceAlert } from './flotte.js';
 import { OUTSTANDING_SQL } from './caisse.js';
 import { issueInvoice } from './factures.js';
+import { notifyOrder, notifyPerson, sendLater, hhmm } from './messages.js';
 
 // Annexe C — motifs d'échec (mêmes codes que lg_failure_reasons et que l'app chauffeur)
 export const FAILURE_REASONS = {
@@ -65,6 +66,13 @@ export async function advanceTrip(ctx, tripId) {
     ctx.db.prepare("UPDATE trip_stops SET status = 'en_route' WHERE id = ? AND company_id = ? AND status = 'pending'").bind(next.id, ctx.company.id),
     ...etaStatements(ctx, t, stops, await etaOrigin(ctx, t)),
   ]);
+  // « votre livreur arrive » (lg_approaching) : seulement pour une livraison
+  const s = await ctx.db.prepare(`SELECT s.kind, s.eta, s.cod_due_fcfa, c.name AS courier, o.* FROM trip_stops s JOIN orders o ON o.id = s.order_id
+      LEFT JOIN couriers c ON c.id = ? WHERE s.id = ? AND s.company_id = ?`).bind(t.courier_id, next.id, ctx.company.id).first();
+  if (s?.kind === 'delivery') {
+    await sendLater(ctx, [await notifyOrder(ctx, 'lg_approaching', s, { livreur: String(s.courier ?? 'Votre livreur').split(' ')[0],
+      minutes: Math.max(5, Math.round((Date.parse(s.eta ?? ctx.now) - Date.parse(ctx.now)) / 60000)), montant: s.cod_due_fcfa })]);
+  }
   return next.id;
 }
 
@@ -200,6 +208,18 @@ export default {
           ...courierPos(ctx, t.courier_id, p),
         ], 'trip_not_sealed');
         await advanceTrip(ctx, t.id);
+        // « en route » avec le code de livraison ; la personne désignée par le client reçoit le même code
+        const rows = (await ctx.db.prepare(`SELECT o.*, dc.code, s.eta, c.name AS courier FROM trip_stops s JOIN orders o ON o.id = s.order_id
+            JOIN delivery_codes dc ON dc.order_id = o.id LEFT JOIN couriers c ON c.id = ? WHERE s.trip_id = ? AND s.company_id = ? AND s.kind = 'delivery'
+              AND s.status IN ('pending', 'en_route')`).bind(t.courier_id, t.id, ctx.company.id).all()).results;
+        const msgs = [];
+        for (const o of rows) {
+          const v = { code: o.code, livreur: String(o.courier ?? 'votre livreur').split(' ')[0], heure: hhmm(o.eta) ?? "aujourd'hui" };
+          msgs.push(await notifyOrder(ctx, 'lg_out_for_delivery', o, v));
+          if (o.recipient_phone) msgs.push(await notifyPerson(ctx, 'lg_third_party_code', { phone: o.recipient_phone, orderId: o.id },
+            { ...v, destinataire: o.recipient_name, prenom: String(o.buyer_name ?? '').split(' ')[0] }));
+        }
+        await sendLater(ctx, msgs);
         return { ok: true };
       });
     },
@@ -363,6 +383,8 @@ export default {
         const limit = (await ctx.db.prepare('SELECT cash_limit_fcfa FROM couriers WHERE id = ?').bind(t.courier_id).first('cash_limit_fcfa')) ?? Number(cfg.cash_limit_fcfa ?? 150000);
         if (inHand > limit) await alertStatement(ctx, cid, 'cash_limit', 'critical', `Le chauffeur du voyage ${t.number} porte ${inHand} F (plafond ${limit} F)`,
           { trip: t.id, dedupe: `cash_limit:${t.id}` }).run();
+        await sendLater(ctx, [await notifyOrder(ctx, 'lg_delivered', o ? { ...o, status: 'delivered', payment_status: 'paid' } : null,
+          { heure: hhmm(ctx.now), facture: invoice ?? '' })]);
         const next = await advanceTrip(ctx, t.id);
         return { ok: true, far, distance_m: dist, cash_in_hand_fcfa: inHand, must_remit: inHand > limit, invoice, next_stop: next };
       });
@@ -412,7 +434,9 @@ export default {
           );
         }
         await runBatch(ctx, stmts, 'stop_closed');
-        // message au client (choisir un autre jour, être rappelé) : cycle C8
+        // message au client : choisir un autre jour ou être rappelé (réponse 1, 2 ou 3)
+        const ord = await ctx.db.prepare('SELECT * FROM orders WHERE id = ? AND company_id = ?').bind(s.order_id, cid).first();
+        await sendLater(ctx, [await notifyOrder(ctx, 'lg_failed', ord, { heure: hhmm(ctx.now), motif: r.label.toLowerCase() })]);
         const next = await advanceTrip(ctx, t.id);
         return { ok: true, incident_id: incident, next_stop: next };
       });

@@ -21,6 +21,24 @@ async function byToken(ctx, token) {
 }
 const notFound = { ok: false, error: 'not_found' };
 
+/**
+ * Note du client (une seule par commande) : rattachée au livreur qui a remis le colis, dont la moyenne est recalculée
+ * dans le même lot ; une note basse ouvre une demande au service client (rappel).
+ */
+export async function rateOrder(ctx, o, rating, comment) {
+  if (await ctx.db.prepare('SELECT 1 AS x FROM ratings WHERE order_id = ? AND company_id = ?').bind(o.id, o.company_id).first()) return;
+  const courier = await ctx.db.prepare(`SELECT t.courier_id FROM trip_stops s JOIN trips t ON t.id = s.trip_id WHERE s.order_id = ? AND s.company_id = ? AND s.status = 'delivered'
+      ORDER BY s.completed_at DESC LIMIT 1`).bind(o.id, o.company_id).first('courier_id');
+  const stmts = [ctx.db.prepare('INSERT OR IGNORE INTO ratings (order_id, company_id, courier_id, rating, comment) VALUES (?, ?, ?, ?, ?)').bind(o.id, o.company_id, courier ?? null, rating, comment)];
+  if (courier) stmts.push(ctx.db.prepare(`UPDATE couriers SET rating_avg = (SELECT round(avg(rating), 2) FROM ratings WHERE courier_id = ?1),
+      rating_count = (SELECT count(*) FROM ratings WHERE courier_id = ?1) WHERE id = ?1 AND company_id = ?2`).bind(courier, o.company_id));
+  if (rating <= 2) {
+    stmts.push(ctx.db.prepare("INSERT INTO customer_requests (id, company_id, order_id, kind, payload) VALUES (?, ?, ?, 'help', ?)")
+      .bind(uuid(), o.company_id, o.id, JSON.stringify({ reason: 'note_basse', rating, comment })));
+  }
+  await ctx.db.batch(stmts);
+}
+
 export default {
   lg_track: {
     roles: 'public',
@@ -134,16 +152,7 @@ export default {
       if (!o || o.status !== 'delivered') return { ok: false, error: 'not_delivered' };
       const rating = Number(a.p_rating);
       if (!Number.isInteger(rating) || rating < 1 || rating > 5) return { ok: false, error: 'invalid_rating' };
-      const comment = text(a.p_comment, 500);
-      // une seule note par commande ; une note basse ouvre une demande au service client (rappel)
-      if (await ctx.db.prepare('SELECT 1 AS x FROM ratings WHERE order_id = ? AND company_id = ?').bind(o.id, o.company_id).first()) return { ok: true };
-      const stmts = [ctx.db.prepare('INSERT OR IGNORE INTO ratings (order_id, company_id, rating, comment) VALUES (?, ?, ?, ?)').bind(o.id, o.company_id, rating, comment)];
-      if (rating <= 2) {
-        stmts.push(ctx.db.prepare("INSERT INTO customer_requests (id, company_id, order_id, kind, payload) VALUES (?, ?, ?, 'help', ?)")
-          .bind(uuid(), o.company_id, o.id, JSON.stringify({ reason: 'note_basse', rating, comment })));
-      }
-      // note moyenne du livreur : cycle C5 (le livreur de la commande n'est connu qu'avec les voyages)
-      await ctx.db.batch(stmts);
+      await rateOrder(ctx, o, rating, text(a.p_comment, 500));
       return { ok: true };
     },
   },

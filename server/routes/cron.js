@@ -3,6 +3,7 @@
 // en quelques requêtes groupées (INSERT … SELECT), jamais en boucle par entreprise : budget de 10 ms de CPU.
 // Portage de lg_watchdog (surveillance, toutes les 5 min) et lg_purge (nettoyage, une fois par heure).
 import { HttpError, json } from '../http.js';
+import { sendPending, render, DEFAULT_TEMPLATES } from '../rpc/messages.js';
 
 const cfg = (key, def) => `coalesce(json_extract(co.settings, '$.${key}'), ${def})`;
 const minutesSince = (col) => `((julianday(?1) - julianday(${col})) * 1440)`;
@@ -60,7 +61,40 @@ export function purgeStatements(db, now) {
   ];
 }
 
+/**
+ * Rapport du soir au gérant (lg_evening_report), pour chaque entreprise qui a renseigné un numéro ou une adresse :
+ * chiffres du jour en une requête groupée, message déposé dans la file (envoi par la tâche « messages »).
+ */
+export async function eveningReport(env, now) {
+  const day = now.slice(0, 10); const from = `${day}T00:00:00.000Z`; const d24 = new Date(Date.parse(now) - 86400000).toISOString();
+  const rows = (await env.DB.prepare(
+    `SELECT co.id, co.name, json_extract(co.settings, '$.manager_phone') AS phone, json_extract(co.settings, '$.manager_email') AS email,
+            (SELECT body_fr FROM message_templates m WHERE m.company_id = co.id AND m.event_key = 'lg_evening_report' AND m.active = 1) AS body,
+            (SELECT count(*) FROM message_templates m WHERE m.company_id = co.id AND m.event_key = 'lg_evening_report' AND m.active = 0) AS off,
+            (SELECT count(*) FROM scan_events e WHERE e.company_id = co.id AND e.event = 'deliver' AND e.server_at >= ?1) AS livres,
+            (SELECT count(*) FROM scan_events e WHERE e.company_id = co.id AND e.event = 'fail' AND e.server_at >= ?1) AS echecs,
+            (SELECT round(100.0 * sum(p.attempts = 0) / nullif(count(*), 0)) FROM scan_events e JOIN packages p ON p.id = e.package_id
+              WHERE e.company_id = co.id AND e.event = 'deliver' AND e.server_at >= ?1) AS premiere,
+            (SELECT round(100.0 * sum(s.completed_at <= coalesce(s.window_end, strftime('%Y-%m-%dT%H:%M:%fZ', s.eta, '+30 minutes'))) / nullif(count(*), 0))
+               FROM trip_stops s WHERE s.company_id = co.id AND s.status = 'delivered' AND s.completed_at >= ?1) AS ponctualite,
+            (SELECT coalesce(sum(abs(gap_fcfa)), 0) FROM cash_remittances r WHERE r.company_id = co.id AND r.validated_at >= ?1) AS especes,
+            (SELECT count(*) FROM packages p WHERE p.company_id = co.id AND p.status = 'staged' AND p.updated_at < ?2) AS a_quai
+       FROM companies co WHERE co.suspended_at IS NULL
+        AND (coalesce(json_extract(co.settings, '$.manager_phone'), '') <> '' OR coalesce(json_extract(co.settings, '$.manager_email'), '') <> '')`,
+  ).bind(from, d24).all()).results;
+  const def = DEFAULT_TEMPLATES.find((t) => t.event_key === 'lg_evening_report').body_fr;
+  const stmts = rows.filter((r) => !r.off).map((r) => {
+    const vars = { entreprise: r.name, livres: r.livres, echecs: r.echecs, premiere_presentation: r.premiere ?? '—', ponctualite: r.ponctualite ?? '—', especes: r.especes, a_quai: r.a_quai };
+    const phone = String(r.phone ?? '').replace(/\D/g, '').slice(-9) || null;
+    return env.DB.prepare('INSERT INTO outbox (id, company_id, event_key, phone, email, vars, text, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(crypto.randomUUID(), r.id, 'lg_evening_report', phone, r.email || null, JSON.stringify(vars), render(r.body ?? def, vars), now);
+  });
+  if (stmts.length) await env.DB.batch(stmts);
+  return { reports: stmts.length };
+}
+
 const TASKS = { watchdog: watchdogStatements, purge: purgeStatements };
+const JOBS = { messages: sendPending, evening: eveningReport };
 
 function sameSecret(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length || a.length < 16) return false;
@@ -73,12 +107,15 @@ function sameSecret(a, b) {
 export async function run(request, env, { task }) {
   if (!env.CRON_SECRET) throw new HttpError(503, 'Tâches planifiées non configurées (secret CRON_SECRET).', 'cron_disabled');
   if (!sameSecret(request.headers.get('x-cron-secret'), env.CRON_SECRET)) throw new HttpError(403, 'Accès refusé.', 'forbidden');
-  const build = TASKS[task];
-  if (!build) throw new HttpError(404, 'Tâche inconnue.', 'unknown_task');
+  const build = TASKS[task]; const job = JOBS[task];
+  if (!build && !job) throw new HttpError(404, 'Tâche inconnue.', 'unknown_task');
   const now = new Date().toISOString();
-  const res = await env.DB.batch(build(env.DB, now));
-  const changes = res.reduce((s, r) => s + (r.meta?.changes ?? 0), 0);
+  let result;
+  if (build) {
+    const res = await env.DB.batch(build(env.DB, now));
+    result = { changes: res.reduce((s, r) => s + (r.meta?.changes ?? 0), 0) };
+  } else result = await job(env, now);
   await env.DB.prepare('INSERT INTO cron_runs (task, ran_at, result) VALUES (?, ?, ?) ON CONFLICT (task) DO UPDATE SET ran_at = excluded.ran_at, result = excluded.result')
-    .bind(task, now, JSON.stringify({ changes })).run();
-  return json({ ok: true, task, changes });
+    .bind(task, now, JSON.stringify(result)).run();
+  return json({ ok: true, task, ...result });
 }

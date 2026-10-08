@@ -131,11 +131,18 @@ l'aperçu (`logistics-full`), migrations D1 appliquées en ligne, déploiement d
       Pages, voir `cron/wrangler.toml`) ; rapport du soir et message de renfort → C8 (messages) ; relances des
       vendeurs → C11 (engagements de délai) ; paiement des gains (marquer « payé ») → C11.
 
-## C8 — Messages clients
-- [ ] Modèles modifiables, aperçu, file d'envoi (`lg_template_save`, `lg_preview_message`), réponses.
-- [ ] Envoi **gratuit** : lien `wa.me` pré-rempli (un geste du répartiteur ou du chauffeur) par défaut ;
-      envoi automatique si l'entreprise branche **sa propre** instance WhatsApp (Green API / WAHA : identifiants
-      chiffrés par entreprise) ; e-mail de secours (Brevo, quota gratuit partagé à surveiller).
+## C8 — Messages clients ✅ (08/10/2026)
+- [x] Modèles modifiables par entreprise (16 messages, défauts dans le code, ligne écrite à la modification), aperçu,
+      file d'envoi (`lg_templates_list`, `lg_template_save`, `lg_preview_message`, `lg_outbox_recent`,
+      `lg_outbox_channels`, `lg_outbox_mark_sent`, `lg_outbox_cancel`) ; messages branchés sur tout le parcours
+      (confirmation, rupture, préparée, en route avec le code, personne désignée, à l'approche, livrée avec la facture,
+      échec, reprise, proposition d'indemnité, renfort, rapport du soir à 19 h).
+- [x] Envoi **gratuit** par défaut : lien `wa.me` pré-rempli dans la file d'envoi ; envoi automatique par l'instance
+      WhatsApp **de l'entreprise** (Green API, jeton chiffré AES-GCM avec `SECRETS_KEY`, `lg_channel_get/save`) par la
+      tâche planifiée « messages » ; e-mail de secours (Brevo) ; réponses du client par webhook
+      (`POST /api/whatsapp/<secret>` : OUI / NON, note 1 à 5, choix 1 / 2 / 3).
+- Reste : migration `0008` à appliquer en ligne ; secrets `SECRETS_KEY` (et `BREVO_API_KEY` si e-mail de secours)
+      à poser (voir `wrangler.toml`) ; versions wolof des modèles à faire rédiger ; relances vendeurs → C11.
 
 ## C9 — Offre payante et site public
 - [ ] Formules : gratuite (quotas : livraisons par mois, chauffeurs, lieux) et Pro (abonnement mensuel),

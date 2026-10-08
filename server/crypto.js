@@ -52,3 +52,19 @@ export async function verifyPassword(password, stored) {
   for (let i = 0; i < got.length; i++) diff |= got[i] ^ expected[i];
   return diff === 0;
 }
+
+// Secrets d'entreprise (jeton WhatsApp…) : AES-GCM, clé dérivée du secret de plateforme SECRETS_KEY.
+async function aesKey(secret) {
+  const raw = await crypto.subtle.digest('SHA-256', enc.encode(`nexus-logistics:${secret}`));
+  return crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['encrypt', 'decrypt']);
+}
+export async function encryptSecret(secret, plain) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await aesKey(secret), enc.encode(plain));
+  return `${b64(iv)}.${b64(ct)}`;
+}
+export async function decryptSecret(secret, stored) {
+  const [iv, ct] = String(stored).split('.');
+  const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(iv) }, await aesKey(secret), unb64(ct));
+  return new TextDecoder().decode(pt);
+}

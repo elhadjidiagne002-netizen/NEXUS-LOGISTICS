@@ -9,11 +9,11 @@ export default function Admin() {
   const me = useMe();
   const [tab, setTab] = useState(me.is_admin ? 'staff' : 'fleet');
   const tabs = me.is_admin ? [['staff', 'Rôles'], ['fleet', 'Flotte'], ['pricing', 'Tarifs et zones'], ['devices', 'Appareils'], ['config', 'Réglages'],
-    ...(MODE === 'api' ? [['api', 'API boutiques']] : [])] : [['fleet', 'Flotte']];
+    ...(MODE === 'api' ? [['api', 'API boutiques'], ['whatsapp', 'WhatsApp']] : [])] : [['fleet', 'Flotte']];
   return <>
     <PageHead title="Administration" back="/" />
     <Tabs tabs={tabs} value={tab} onChange={setTab} />
-    {tab === 'staff' && <Staff />}{tab === 'fleet' && <Fleet />}{tab === 'pricing' && <Pricing />}{tab === 'config' && <Config />}{tab === 'devices' && <Devices />}{tab === 'api' && <ApiKeys />}
+    {tab === 'staff' && <Staff />}{tab === 'fleet' && <Fleet />}{tab === 'pricing' && <Pricing />}{tab === 'config' && <Config />}{tab === 'devices' && <Devices />}{tab === 'api' && <ApiKeys />}{tab === 'whatsapp' && <WhatsApp />}
   </>;
 }
 
@@ -322,6 +322,29 @@ function NewZone({ empty, reload }) {
 }
 
 // Clés d'API : les boutiques en ligne envoient leurs commandes payées (POST /api/v1/orders)
+// Envoi automatique des messages par l'instance WhatsApp de l'entreprise (Green API) ; sans elle, envoi manuel gratuit (wa.me).
+function WhatsApp() {
+  const { data, error, reload } = useRpc('lg_channel_get', {});
+  const [inst, setInst] = useState(''); const [token, setToken] = useState(''); const [run, busy] = useAction();
+  return <div className="split">
+    <Card><h3>Envoi automatique</h3><ErrorBox error={error} />
+      {data?.connected ? <><div className="flash ok">Instance {data.instance_id} branchée : les messages partent seuls (toutes les 5 minutes).</div>
+        <Field label="Adresse à donner à Green API pour recevoir les réponses (OUI / NON, notes)"><input className="input mono" readOnly value={data.webhook_url} onFocus={(e) => e.target.select()} /></Field>
+        {data.last_error && <div className="flash bad">{data.last_error}</div>}
+        <Btn kind="bad" disabled={busy} onClick={() => confirm('Débrancher WhatsApp ? Les messages repasseront en envoi manuel.') && run(async () => { const r = await rpc('lg_channel_save', { p_disconnect: true }); reload(); return r; }, { ok: 'WhatsApp débranché' })}>Débrancher</Btn></>
+        : <><p className="small">Sans instance, chaque message attend dans <b>Messages → File d'envoi</b> : un appui ouvre WhatsApp avec le texte prêt (gratuit).</p>
+          <Field label="Numéro d'instance (idInstance)"><input className="input" inputMode="numeric" value={inst} onChange={(e) => setInst(e.target.value.trim())} /></Field>
+          <Field label="Jeton (apiTokenInstance)"><input className="input mono" value={token} onChange={(e) => setToken(e.target.value.trim())} /></Field>
+          <Btn kind="primary" disabled={busy || !inst || !token} onClick={() => run(async () => { const r = await rpc('lg_channel_save', { p_instance_id: inst, p_token: token }); setToken(''); reload(); return r; }, { ok: 'WhatsApp branché' })}>Brancher</Btn></>}</Card>
+    <Card><h3>Comment faire</h3><ol className="small">
+      <li>Créez un compte sur green-api.com et une instance (offre gratuite pour commencer).</li>
+      <li>Scannez le QR code avec le WhatsApp de l'entreprise.</li>
+      <li>Collez ici le numéro d'instance et le jeton : il est chiffré, jamais réaffiché.</li>
+      <li>Dans Green API, collez l'adresse des réponses ci-contre (webhook « incomingMessageReceived »).</li></ol>
+      <p className="small muted">Si WhatsApp échoue et que le client a une adresse e-mail, un e-mail de secours part (une seule fois).</p></Card>
+  </div>;
+}
+
 function ApiKeys() {
   const { data, error, reload } = useRpc('lg_api_keys_list', {});
   const [name, setName] = useState(''); const [created, setCreated] = useState(null); const [run, busy] = useAction();

@@ -5,6 +5,7 @@ import { handleRpc } from './rpc/index.js';
 import * as apiV1 from './routes/api-v1.js';
 import * as files from './routes/files.js';
 import * as cron from './routes/cron.js';
+import * as whatsapp from './routes/whatsapp.js';
 
 const ROUTES = [
   ['GET', /^\/api\/health$/, () => json({ ok: true, service: 'nexus-logistics' })],
@@ -20,6 +21,7 @@ const ROUTES = [
   ['PUT', /^\/api\/files\/(?<path>[^?#]{8,320})$/, files.put],
   ['GET', /^\/api\/files\/(?<path>[^?#]{8,320})$/, files.get],
   ['POST', /^\/api\/cron\/(?<task>[a-z_]{3,30})$/, cron.run],
+  ['POST', /^\/api\/whatsapp\/(?<secret>[\w-]{24,64})$/, whatsapp.incoming],
   ['POST', /^\/api\/rpc\/(?<name>lg_[a-z0-9_]{1,60})$/, (req, env, p) => handleRpc(req, env, p.name)],
 ];
 

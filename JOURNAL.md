@@ -2,6 +2,19 @@
 
 Le plus récent en premier.
 
+## 08/10/2026 — Cycle C8 (Cloudflare) : messages aux clients
+- **Fait** : `migrations/0008_messages.sql` (modèles modifiés, file d'envoi, instance WhatsApp de l'entreprise) ;
+  `server/rpc/messages.js` (modèles, rendu, file, envoi Green API / Brevo, réponses) ; `server/routes/whatsapp.js`
+  (webhook des réponses) ; tâches planifiées « messages » (toutes les 5 min) et « evening » (19 h) ; messages créés
+  dans commandes, préparation, tournée, retours, incidents et renforts ; note du client rattachée au livreur (moyenne
+  recalculée) ; Messages : bouton « Envoyer sur WhatsApp » (wa.me) ; Administration → WhatsApp.
+- **Choix** : un message ne bloque jamais l'action (`sendLater` : lot séparé, erreur journalisée) ; le texte final
+  est figé à la création ; le jeton WhatsApp est chiffré et n'est jamais renvoyé (table `channels`, pas les réglages
+  lisibles par tous les membres) ; modèles lus une seule fois par requête (promesse gardée : import de 50 commandes).
+- **État** : 69 tests serveur, 12 unitaires, builds OK ; file d'envoi et réglage WhatsApp vérifiés dans Chromium.
+- **À faire en ligne** : migration `0008_messages.sql` ; `npx wrangler pages secret put SECRETS_KEY --project-name
+  nexus-logistics` (et `BREVO_API_KEY` pour l'e-mail de secours).
+
 ## 08/10/2026 — Cycle C7 (Cloudflare) : pilotage et tâches planifiées
 - **Fait** : `migrations/0007_pilotage.sql` (renforts, dernier passage des tâches) ; `server/rpc/pilotage.js`
   (tour de contrôle, acquittement des alertes, indicateurs, axes, coûts et marges, prévision, anomalies, classement,

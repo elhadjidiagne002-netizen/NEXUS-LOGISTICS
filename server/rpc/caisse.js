@@ -9,6 +9,7 @@ import { normCode } from './preparation.js';
 import { tripFor } from './voyages.js';
 import { alertStatement } from './flotte.js';
 import { creditNote } from './factures.js';
+import { notifyOrder, notifyPerson, sendLater, hhmm } from './messages.js';
 
 /** Espèces encore portées pour un voyage (encaissées − versements intermédiaires), expression SQL sur l'alias t. */
 export const OUTSTANDING_SQL = `((SELECT coalesce(sum(cc.amount_collected_fcfa), 0) FROM cod_collections cc JOIN trip_stops s ON s.id = cc.stop_id
@@ -289,7 +290,11 @@ export default {
           await ctx.db.prepare('UPDATE incidents SET credit_note_id = ? WHERE id = ? AND company_id = ?').bind(c.id, i.id, cid).run();
         }
       }
-      // proposition au client (page de suivi) : message WhatsApp au cycle C8
+      // proposition au client, à accepter depuis sa page de suivi
+      if (comp > 0 && i.order_id && !close) {
+        const o = await ctx.db.prepare('SELECT * FROM orders WHERE id = ? AND company_id = ?').bind(i.order_id, cid).first();
+        await sendLater(ctx, [await notifyOrder(ctx, 'lg_incident_proposal', o, { resolution, indemnite: ` (indemnité de ${comp.toLocaleString('fr-FR').replace(/[\u202f\u00a0]/g, ' ')} F)` })]);
+      }
       if (i.kind === 'cash_gap' && close && i.trip_id) await tryReconcile(ctx, i.trip_id);
       await audit(ctx, 'incident_resolve', 'incident', i.number, { resolution, compensation: comp, closed: close });
       return { ok: true, closed: close, awaiting_customer: !close && a.p_close !== false, credit_note: credit, cap_fcfa: cap };

@@ -9,6 +9,7 @@ import { randomToken, sha256Hex } from '../crypto.js';
 import { chunks } from '../http.js';
 import { loadPricing, computeQuote, insuranceFee, zoneAt, SERVICES } from './tarifs.js';
 import { releaseStatements } from './preparation.js';
+import { notifyOrder, notifyPerson, sendLater, hhmm } from './messages.js';
 
 export const IMPORT_MAX = 50;          // commandes par appel (import CSV, API) : budget de requêtes D1
 const MAX_ITEMS = 50;                  // lignes par commande
@@ -189,6 +190,11 @@ export async function createOrders(ctx, inputs, source) {
         promised_at: o.promised, tracking_token: o.token, tracking_url: trackingUrl(ctx, o.token),
       };
     }
+    // message au client : demande de confirmation (paiement à la livraison) ou commande confirmée (payée d'avance)
+    await sendLater(ctx, await Promise.all(built.map((b) => notifyOrder(ctx, b.o.method === 'cod' ? 'lg_cod_confirm' : 'lg_order_confirmed', {
+      id: b.o.id, number: res[b.at].results[0]?.number, buyer_name: b.o.name, buyer_phone: b.o.phone, buyer_email: b.o.email, vendor_name: b.o.vendor.name,
+      payment_method: b.o.method, payment_status: b.o.method === 'prepaid' ? 'paid' : 'pending', total_fcfa: b.o.total, tracking_token: b.o.token,
+    }))));
   }
   return results;
 }
@@ -217,6 +223,11 @@ export async function confirmCod(ctx, companyId, orderId, via) {
       .bind(ctx.now, via, ctx.now, orderId, companyId),
     ...releaseStatements(c, { id: orderId, promised_at: o.promised_at, created_at: o.created_at }),
   ]);
+  if (!o.cod_confirmed_at) {
+    const row = await ctx.db.prepare('SELECT * FROM orders WHERE id = ? AND company_id = ?').bind(orderId, companyId).first();
+    const tc = c.company.name ? c : { ...c, company: { ...c.company, ...(await ctx.db.prepare('SELECT id, name FROM companies WHERE id = ?').bind(companyId).first()), config: c.company.config ?? {} } };
+    await sendLater(tc, [await notifyOrder(tc, 'lg_order_confirmed', row)]);
+  }
   return { ok: true, confirmed: true };
 }
 

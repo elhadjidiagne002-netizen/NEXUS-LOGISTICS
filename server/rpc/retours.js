@@ -8,6 +8,7 @@ import { tripFor, refreshStatement } from './voyages.js';
 import { UNRETURNED_SQL, FAILURE_REASONS } from './terrain.js';
 import { tryReconcile } from './caisse.js';
 import { creditPackage } from './factures.js';
+import { notifyOrder, notifyPerson, sendLater, hhmm } from './messages.js';
 
 // Causes de retour par défaut (cycle 8, « à valider ») : une ligne n'est écrite que si l'entreprise les modifie.
 export const DEFAULT_CAUSES = [
@@ -316,7 +317,7 @@ export default {
         if (e?.code === 'already_scheduled') fail('already_scheduled', 409);
         throw e;
       }
-      // message « reprise prévue » au client : cycle C8
+      await sendLater(ctx, [await notifyOrder(ctx, 'lg_return_scheduled', o)]);
       return { ok: true, stop_id: stop, code };
     },
   },

@@ -9,6 +9,7 @@ import { OUTSTANDING_SQL } from './caisse.js';
 import { FAILURE_REASONS } from './terrain.js';
 import { causesOf } from './retours.js';
 import { amountDue } from './commandes.js';
+import { notifyOrder, notifyPerson, sendLater, hhmm } from './messages.js';
 
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 const addDays = (d, n) => new Date(Date.parse(`${d}T00:00:00.000Z`) + n * 86400000).toISOString().slice(0, 10);
@@ -469,6 +470,10 @@ export default {
       if (!(needed > 0)) fail('invalid_quantity');
       const zones = (Array.isArray(a.p_zones) ? a.p_zones : []).map((z) => text(z, 60)).filter(Boolean).slice(0, 30);
       const cid = ctx.company.id; const id = uuid();
+      // chauffeurs actifs pas encore sollicités pour ce jour : ils reçoivent le message une fois
+      const fresh = (await ctx.db.prepare(`SELECT c.id, c.name, c.phone, u.email FROM couriers c LEFT JOIN users u ON u.id = c.user_id
+          WHERE c.company_id = ?1 AND c.active = 1 AND NOT EXISTS (SELECT 1 FROM reinforcement_answers a JOIN reinforcement_calls r ON r.id = a.call_id
+            WHERE r.company_id = ?1 AND r.day = ?2 AND a.courier_id = c.id)`).bind(cid, day).all()).results;
       const res = await ctx.db.batch([
         ctx.db.prepare(`INSERT INTO reinforcement_calls (id, company_id, day, needed, zones, note, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (company_id, day) DO UPDATE SET needed = excluded.needed, zones = excluded.zones, note = excluded.note, status = 'open'`)
@@ -478,6 +483,9 @@ export default {
         ctx.db.prepare('SELECT id FROM reinforcement_calls WHERE company_id = ? AND day = ?').bind(cid, day),
       ]);
       const callId = res[2].results[0].id;
+      const jour = `${day.slice(8, 10)}/${day.slice(5, 7)}`;
+      await sendLater(ctx, await Promise.all(fresh.map((c) => notifyPerson(ctx, 'lg_reinforcement', { phone: c.phone, email: c.email },
+        { prenom: String(c.name ?? '').split(' ')[0], jour, zones: zones.length ? ` (${zones.join(', ')})` : '' }))));
       await audit(ctx, 'reinforcement_call', 'day', day, { needed, notified: res[1].meta.changes });
       return { ok: true, id: callId, notified: res[1].meta.changes };
     },

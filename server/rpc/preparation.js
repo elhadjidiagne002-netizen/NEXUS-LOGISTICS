@@ -6,6 +6,7 @@
 // Pas de verrou SELECT … FOR UPDATE : transitions par UPDATE conditionnel + assertions de lot (guard/runBatch).
 import { fail, audit, idempotent, hasRole, text, int, uuid, parseJson, guard, runBatch, today, plusMinutes } from './core.js';
 import { loadStock, pickLocation, lotHint, consumeStatements, locKey } from './stock.js';
+import { notifyOrder, notifyPerson, sendLater, hhmm } from './messages.js';
 
 const ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
 const HANDLING = ['fragile', 'lourd', 'liquide', 'alimentaire', 'froid', 'vivant', 'chimique'];
@@ -232,8 +233,11 @@ export default {
             .bind((before - found) * l.unit_price_fcfa, ctx.now, t.order_id, ctx.company.id),
           ...consumeStatements(ctx, loc, extra, l.id, today(ctx)),
         ], 'task_not_picking');
-        // message au client (remplacer, rembourser, attendre) : cycle C8 ; sa réponse arrive dans « Demandes »
+        // message au client (remplacer, rembourser, attendre) ; sa réponse arrive dans « Demandes »
         await audit(ctx, 'pick_short', 'pick_line', l.id, { ordered: l.qty_ordered, found });
+        const ord = await ctx.db.prepare('SELECT o.*, oi.product_name FROM orders o JOIN order_items oi ON oi.id = ? WHERE o.id = ? AND o.company_id = ?')
+          .bind(l.order_item_id, t.order_id, ctx.company.id).first();
+        await sendLater(ctx, [await notifyOrder(ctx, 'lg_stockout', ord, { produit: ord?.product_name, line_id: l.id })]);
         const pending = await ctx.db.prepare("SELECT COUNT(*) AS n FROM pick_lines WHERE task_id = ? AND company_id = ? AND status = 'pending'").bind(t.id, ctx.company.id).first('n');
         return { ok: true, line_id: l.id, missing: l.qty_ordered - found, task_done: pending === 0 };
       });
@@ -324,6 +328,7 @@ export default {
           .bind(ctx.now, ctx.now, o.id, ctx.company.id));
         await runBatch(ctx, stmts, 'task_not_picking');
         // message « commande préparée » au client : cycle C8
+        await sendLater(ctx, [await notifyOrder(ctx, 'lg_prepared', o, { colis: out.length })]);
         return { ok: true, packages: out, zone: o.delivery_zone };
       });
     },
