@@ -198,7 +198,7 @@ function ZoneRow({ z, reload }) {
 const CFG = [['max_attempts', 'Présentations avant retour vendeur'], ['proof_radius_m', 'Rayon de validation (m)'], ['cash_limit_fcfa', 'Plafond d\'espèces par chauffeur (F)'],
   ['pick_lock_minutes', 'Libération d\'une préparation inactive (min)'], ['tva_rate', 'Taux de TVA (%)'], ['heavy_kg', 'Seuil « lourd » (kg)'],
   ['otp_attempts', 'Essais du code client'], ['staged_max_hours', 'Alerte colis à quai (h)'], ['stop_max_minutes', 'Alerte arrêt long (min)'],
-  ['pay_per_package', 'Prime par colis livré (F)'], ['bonus_zero_failure', 'Bonus zéro échec (F)'], ['manager_phone', 'WhatsApp du gérant (rapport du soir)'], ['manager_email', 'E-mail du gérant (secours du rapport du soir)'], ['maintenance_alert_km', 'Alerte entretien (km avant l\'échéance)'],
+  ['pay_per_package', 'Prime par colis livré (F)'], ['bonus_zero_failure', 'Bonus zéro échec (F)'], ['manager_phone', 'WhatsApp du gérant (rapport du soir)'], ['manager_email', 'E-mail du gérant (secours du rapport du soir)'], ['maintenance_alert_km', 'Alerte entretien (km avant l\'échéance)'], ['auto_arrive_m', 'Arrivée détectée à moins de (m, 0 = désactivée)'],
   ['bonus_on_time', 'Prime par livraison à l\'heure (F)'], ['double_check_fcfa', 'Double contrôle au-delà de (F)'],
   ['tracking_base_url', 'Adresse de la page de suivi'], ['expiry_alert_days', 'Alerte péremption (jours avant la date)'],
   ['insurance_rate_pct', 'Assurance : prime (% de la valeur déclarée)'], ['insurance_min_fcfa', 'Assurance : prime minimale (F)'],

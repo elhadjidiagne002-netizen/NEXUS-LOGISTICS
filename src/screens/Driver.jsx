@@ -28,7 +28,8 @@ export function getPos(timeout = 6000) {
 export default function Driver({ stopId }) {
   const day = useRpc('lg_my_day', {}, { refresh: 30000 });
   const inProgress = day.data?.trips?.some((t) => t.status === 'in_progress');
-  usePositionBroadcast(inProgress);
+  const toast = useToast();
+  usePositionBroadcast(inProgress, () => { toast('Arrivée détectée : vous êtes sur place', 'ok'); feedback('ok'); day.reload(); });
   if (day.loading && !day.data) return <Loading />;
   if (day.error) return <><PageHead title="Ma journée" back="/" /><ErrorBox error={day.error} /></>;
   const stop = stopId && day.data.trips.flatMap((t) => t.stops.map((s) => ({ ...s, trip: t }))).find((s) => s.id === stopId);
@@ -38,7 +39,7 @@ export default function Driver({ stopId }) {
 }
 
 /** Position envoyée toutes les 10 s tant que l'app est visible et qu'un voyage roule (le serveur n'écrit qu'une fois par minute). */
-function usePositionBroadcast(active) {
+function usePositionBroadcast(active, onArrive) {
   useEffect(() => {
     if (!active || !navigator.geolocation) return;
     let last = 0;
@@ -46,7 +47,8 @@ function usePositionBroadcast(active) {
       if (Date.now() - last < 10000 || document.visibilityState !== 'visible') return;
       last = Date.now();
       rpc('lg_driver_ping', { p_lat: p.coords.latitude, p_lng: p.coords.longitude, p_accuracy_m: Math.round(p.coords.accuracy),
-        p_speed_kmh: p.coords.speed != null ? Math.round(p.coords.speed * 3.6) : null }).catch(() => {});
+        p_speed_kmh: p.coords.speed != null ? Math.round(p.coords.speed * 3.6) : null })
+        .then((r) => { if (r?.arrived_stop) onArrive?.(r); }).catch(() => {});   // arrivée détectée par le serveur (rayon auto_arrive_m)
     }, () => {}, { enableHighAccuracy: true, maximumAge: 10000 });
     return () => navigator.geolocation.clearWatch(id);
   }, [active]);

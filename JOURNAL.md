@@ -2,6 +2,15 @@
 
 Le plus récent en premier.
 
+## 08/10/2026 — Cycle 21 : arrivée détectée automatiquement (module 04, P2)
+- `lg_driver_ping` (positions envoyées toutes les 10 s pendant la tournée) passe l'arrêt en cours à
+  « arrivé » quand le chauffeur est à moins de `auto_arrive_m` (80 m, 0 = désactivé) avec un GPS précis
+  (≤ 100 m) ; colonne `arrived_auto` pour distinguer de l'appui sur « Arrivé » (toujours possible).
+  Effet de bord voulu : le chronomètre de l'alerte « arrêt long » démarre même si le chauffeur oublie
+  de toucher l'écran.
+- App chauffeur : message « Arrivée détectée » et rafraîchissement. Réglage dans l'administration.
+- Tests : 101/101.
+
 ## 08/10/2026 — Cycle 20 : retour de tournée, écart signalé à la clôture (module 03, P2)
 - **Défaut** : l'alerte `not_scanned` était prévue dès le socle mais **jamais levée** ; un chauffeur pouvait
   terminer sa tournée sans que personne ne voie les colis non livrés qu'il devait rapporter.
