@@ -250,7 +250,8 @@ function Config() {
     onChange={(e) => setF({ ...cur, [k]: e.target.value })} /></Field>)}
     <Field label="Émetteur de la facture client"><select className="input" value={cur.invoice_issuer ?? 'vendor_via_nexus'} onChange={(e) => setF({ ...cur, invoice_issuer: e.target.value })}>
       <option value="vendor_via_nexus">Le vendeur, par l'intermédiaire de NEXUS</option><option value="nexus">NEXUS Market en son nom</option></select></Field>
-    <label className="check"><input type="checkbox" checked={cur.require_photo !== false && cur.require_photo !== 'false'} onChange={(e) => setF({ ...cur, require_photo: e.target.checked })} /> Photo obligatoire à la livraison et à l'échec</label></div>
+    <label className="check"><input type="checkbox" checked={cur.require_photo !== false && cur.require_photo !== 'false'} onChange={(e) => setF({ ...cur, require_photo: e.target.checked })} /> Photo obligatoire à la livraison et à l'échec</label>
+    {MODE === 'api' && <label className="check"><input type="checkbox" checked={cur.prep_at_vendor === true || cur.prep_at_vendor === 'true'} onChange={(e) => setF({ ...cur, prep_at_vendor: e.target.checked })} /> Les commandes d'un vendeur se préparent chez lui (sinon au dépôt)</label>}</div>
     <PeakDays value={Array.isArray(cur.peak_days) ? cur.peak_days : []} onChange={(peak_days) => setF({ ...cur, peak_days })} />
     <Btn kind="primary" size="xl" style={{ marginTop: 12 }} disabled={!f || busy} onClick={() => run(async () => {
       const clean = Object.fromEntries(Object.entries(f).filter(([, v]) => v !== '' && v != null).map(([k, v]) => [k, typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v) ? Number(v) : v]));

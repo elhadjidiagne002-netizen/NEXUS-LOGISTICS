@@ -128,7 +128,7 @@ test('saisie d\'une commande : numéro sans trou, client mémorisé, devis appli
   const o1 = await order(a, { p_event: ev });
   assert.deepEqual([o1.number, o1.zone, o1.delivery_fee_fcfa, o1.total_fcfa, o1.amount_due_fcfa], [1, 'Yoff', 1500, 13500, 13500]);
   assert.match(o1.tracking_url, /\/suivi\/[\w-]{24}$/);
-  assert.deepEqual(await order(a, { p_event: ev }), o1, 'même p_event : même résultat, pas de 2e commande');
+  assert.deepEqual(await order(a, { p_event: ev }), { ...o1, replayed: true }, 'même p_event : même résultat, pas de 2e commande');
   // une erreur ne consomme pas de numéro
   assert.equal(await a.rpcError('lg_order_create', { p_customer: customer, p_zone: 'Lune', p_items: items }), 'unknown_zone');
   assert.equal(await a.rpcError('lg_order_create', { p_customer: { name: 'X', phone: '12' }, p_zone: 'Yoff', p_items: items }), 'invalid_customer');

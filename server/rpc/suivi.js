@@ -25,8 +25,12 @@ export default {
     async handler(ctx, a) {
       const o = await byToken(ctx, a.p_token);
       if (!o) return notFound;
-      const rated = await ctx.db.prepare('SELECT 1 AS x FROM ratings WHERE order_id = ? AND company_id = ?').bind(o.id, o.company_id).first();
-      const open = o.status === 'pending' || o.status === 'processing';
+      const k = await ctx.db.prepare(
+        `SELECT EXISTS (SELECT 1 FROM ratings WHERE order_id = ?1 AND company_id = ?2) AS rated,
+                (SELECT min(created_at) FROM packages WHERE order_id = ?1 AND company_id = ?2) AS packed_at,
+                EXISTS (SELECT 1 FROM packages WHERE order_id = ?1 AND company_id = ?2 AND status IN ('loaded', 'out_for_delivery', 'delivered')) AS loaded`,
+      ).bind(o.id, o.company_id).first();
+      const rated = k.rated; const open = (o.status === 'pending' || o.status === 'processing') && !k.loaded;
       return {
         ok: true,
         company: { name: o.company_name },
@@ -38,7 +42,7 @@ export default {
         amount_due_fcfa: amountDue(o),
         steps: [
           { key: 'confirmed', label: 'Commande confirmée', at: o.cod_confirmed_at ?? o.paid_at ?? (o.payment_method !== 'cod' ? o.created_at : null) },
-          { key: 'prepared', label: 'Colis préparé', at: o.processing_at },   // date d'emballage : cycle C3
+          { key: 'prepared', label: 'Colis préparé', at: k.packed_at },
           { key: 'shipped', label: 'En route', at: o.in_transit_at },
           { key: 'delivered', label: 'Livré', at: o.delivered_at },
         ],
@@ -73,6 +77,8 @@ export default {
       const lat = num(a.p_lat); const lng = num(a.p_lng);
       if (lat == null || lng == null || Math.abs(lat) > 90 || Math.abs(lng) > 180) return { ok: false, error: 'invalid_position' };
       if (o.status !== 'pending' && o.status !== 'processing') return { ok: false, error: 'already_loaded' };
+      if (await ctx.db.prepare("SELECT 1 AS x FROM packages WHERE order_id = ? AND company_id = ? AND status IN ('loaded', 'out_for_delivery', 'delivered')")
+        .bind(o.id, o.company_id).first()) return { ok: false, error: 'already_loaded' };
       const zones = (await ctx.db.prepare('SELECT name, lat, lng, polygon FROM zones WHERE company_id = ?').bind(o.company_id).all())
         .results.map((z) => ({ ...z, polygon: parseJson(z.polygon) }));
       // épingle posée trop loin de toute zone servie par l'entreprise : sans doute une erreur de manipulation

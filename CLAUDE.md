@@ -31,6 +31,9 @@ financier**. Il ne vit plus dans la base Supabase de NEXUS Market. Plan par cycl
    transitions d'état par UPDATE **conditionnel** (`WHERE status = 'x'`) + contrôle de `meta.changes`
    au lieu de `SELECT … FOR UPDATE` ; insertions dépendantes conditionnées dans le même lot
    (`INSERT … SELECT … WHERE EXISTS (…)`, cf. `acceptInvite`).
+   Pour annuler tout un lot si l'état a changé depuis la lecture : `guard(db, 'condition SQL', params)` dans le lot
+   et `runBatch(ctx, stmts, 'code_erreur')` (`server/rpc/core.js`). Pas d'apostrophe dans un commentaire `--` à
+   l'intérieur d'une requête : la D1 imitée des tests compte mal les paramètres.
 4. **Idempotence** des actions de terrain : `idempotent(ctx, nom, args.p_event, fn)` (`server/rpc/core.js`).
 5. **Un refus métier qui doit laisser une trace ne lève pas d'erreur** : renvoyer `{ ok:false, error }` après
    avoir écrit (ex. essais du code client décomptés). Les autres refus : `fail('code')` → `{ error: code }`.

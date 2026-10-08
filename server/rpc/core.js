@@ -29,10 +29,14 @@ export async function audit(ctx, action, entity, entityId, detail = null) {
 export async function idempotent(ctx, fnName, eventId, fn) {
   if (!eventId) return fn();
   const prev = await ctx.db.prepare('SELECT result FROM action_log WHERE company_id = ? AND event_id = ?').bind(ctx.company.id, String(eventId)).first();
-  if (prev) return JSON.parse(prev.result);
+  if (prev) {
+    // rejeu : même résultat, marqué (la file hors ligne ne le compte pas comme un nouveau refus)
+    const r = JSON.parse(prev.result);
+    return r && typeof r === 'object' && !Array.isArray(r) ? { ...r, replayed: true } : r;
+  }
   const result = await fn();
-  await ctx.db.prepare('INSERT OR IGNORE INTO action_log (company_id, event_id, fn, result) VALUES (?, ?, ?, ?)')
-    .bind(ctx.company.id, String(eventId), fnName, JSON.stringify(result ?? null)).run();
+  await ctx.db.prepare('INSERT OR IGNORE INTO action_log (company_id, event_id, fn, result, actor_id) VALUES (?, ?, ?, ?, ?)')
+    .bind(ctx.company.id, String(eventId), fnName, JSON.stringify(result ?? null), ctx.user?.id ?? null).run();
   return result;
 }
 
@@ -67,3 +71,25 @@ export function distanceM(lat1, lng1, lat2, lng2) {
   const a = Math.sin(((lat2 - lat1) * r) / 2) ** 2 + Math.cos(lat1 * r) * Math.cos(lat2 * r) * Math.sin(((lng2 - lng1) * r) / 2) ** 2;
   return Math.round(12742000 * Math.asin(Math.sqrt(a)));
 }
+
+/**
+ * Assertion dans un lot atomique (règle 3, pas de transaction interactive) : si `condition` (SQL) est fausse
+ * au moment où le lot s'exécute, TOUT le lot est annulé. À passer à runBatch, qui traduit l'échec en `code`.
+ */
+export const guard = (db, condition, params = []) =>
+  db.prepare(`INSERT INTO batch_guards (ok) SELECT 0 WHERE NOT (${condition})`).bind(...params);
+
+/** env.DB.batch qui transforme l'échec d'une assertion (guard) en refus métier `code`. */
+export async function runBatch(ctx, stmts, code = 'conflict', status = 409) {
+  try {
+    return await ctx.db.batch(stmts);
+  } catch (e) {
+    if (/CHECK constraint failed/i.test(String(e?.message)) && /ok = 1|batch_guards/i.test(String(e?.message))) fail(code, status);
+    throw e;
+  }
+}
+
+/** Jour calendaire de Dakar (= UTC) au format AAAA-MM-JJ. */
+export const today = (ctx) => ctx.now.slice(0, 10);
+/** Date ISO décalée de n minutes. */
+export const plusMinutes = (iso, n) => new Date(Date.parse(iso) + n * 60000).toISOString();

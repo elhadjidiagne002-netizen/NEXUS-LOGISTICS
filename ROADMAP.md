@@ -49,12 +49,21 @@ l'aperçu (`logistics-full`), migrations D1 appliquées en ligne, déploiement d
   confirmation (C3) ; livreur/position/échec/facture sur la page de suivi (C4-C6) ; dessin des polygones de zone sur
   la carte (aujourd'hui : centre seulement à l'écran, polygone par `lg_set_zone`) ; `lg_track_incidents` (C11).
 
-## C3 — Préparation et entrepôt
-- [ ] Tâches de préparation, verrou de prise (`pick_lock_minutes`), scan article par article, ruptures,
-      emballage multi-colis, pesée, étiquettes (`lg_pick_*`, `lg_labels`, `lg_resolve_short`, `lg_wave_create`).
-- [ ] Préparation chez le vendeur OU au hub (les deux, réglage par entreprise).
-- [ ] Entrepôt : emplacements, rangement, lots et péremption FEFO, inventaire, productivité
-      (`lg_location_upsert`, `lg_lot_trace`…). Portage des tests `cycle4`, `cycle6`, `cycle7`.
+## C3 — Préparation et entrepôt ✅ (08/10/2026)
+- [x] Migration `0003_preparation.sql` : tâches et lignes de préparation, vagues, colis, contenu des colis, journal de
+      scans en ajout seul (déclencheur), emplacements, stock par emplacement, lots datés et leurs mouvements, comptages
+      d'inventaire, incidents (créés par le double contrôle ; gérés au C11).
+- [x] Tâches de préparation ouvertes par la confirmation du paiement à la livraison ou par une commande payée d'avance,
+      verrou de prise (`pick_lock_minutes`), scan article par article (code-barres, référence, code interne NXI-), rupture
+      (montant dû réduit, stock à zéro), emballage multi-colis, pesée, mentions héritées, étiquettes, mise à quai,
+      double contrôle au-delà de `double_check_fcfa`, vagues (`lg_pick_*`, `lg_pack`, `lg_stage`, `lg_labels`,
+      `lg_resolve_short`, `lg_wave_*`, `lg_double_check`).
+- [x] Préparation chez le vendeur OU au hub : réglage `prep_at_vendor` (Administration → Réglages).
+- [x] Entrepôt : emplacements, rangement par lot, FEFO, rebut, traçabilité, inventaire tournant, productivité
+      (`lg_location_upsert`, `lg_put_away`, `lg_lot_*`, `lg_inventory_*`, `lg_pick_productivity`), fiche colis.
+      8 tests serveur (portage de `parcours` 01-07, `cycle3`, `cycle4`, `cycle6`, `cycle7`, isolation, rôles).
+- Reste : migration `0003` à appliquer en ligne ; messages au client (rupture, commande préparée) au C8 ; avoir sur
+  rupture remboursée au C6.
 
 ## C4 — Flotte, quai et voyages
 - [ ] Véhicules, documents, entretien au km, contrôle avant départ (`lg_fleet`, `lg_upsert_vehicle`,

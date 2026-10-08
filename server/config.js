@@ -31,6 +31,7 @@ export const CONFIG_DEFAULTS = {
   uninsured_cap_fcfa: 50000,
   maintenance_alert_km: 500,
   auto_arrive_m: 80,
+  prep_at_vendor: false,      // true : la commande d'un vendeur membre se prépare chez lui (sinon au hub)
 };
 
 export const CONFIG_KEYS = Object.keys(CONFIG_DEFAULTS);

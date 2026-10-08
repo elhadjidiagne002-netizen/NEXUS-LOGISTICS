@@ -8,6 +8,7 @@ import { fail, audit, idempotent, hasRole, text, num, int, uuid, phoneKey, parse
 import { randomToken, sha256Hex } from '../crypto.js';
 import { chunks } from '../http.js';
 import { loadPricing, computeQuote, insuranceFee, zoneAt, SERVICES } from './tarifs.js';
+import { releaseStatements } from './preparation.js';
 
 export const IMPORT_MAX = 50;          // commandes par appel (import CSV, API) : budget de requêtes D1
 const MAX_ITEMS = 50;                  // lignes par commande
@@ -20,7 +21,14 @@ export const trackingUrl = (ctx, token) => `${new URL(ctx.request.url).origin}/s
  * Montant à encaisser à la livraison (équivalent de lg_order_due_fcfa) : 0 si payé d'avance.
  * Le même chiffre pour le chauffeur, la page de suivi et la facture. Les ruptures (C3) le réduiront.
  */
-export const amountDue = (o) => (o.payment_method !== 'cod' || o.payment_status === 'paid' ? 0 : o.total_fcfa);
+export const amountDue = (o) => {
+  if (o.payment_method !== 'cod' || o.payment_status === 'paid') return 0;
+  // ruptures exclues, remise au prorata de ce qui reste (lg_order_due_fcfa)
+  const short = o.shortage_fcfa ?? 0;
+  return o.total_fcfa - short + (o.subtotal_fcfa ? Math.round(((o.discount_fcfa ?? 0) * short) / o.subtotal_fcfa) : 0);
+};
+/** Colis déjà partis (chargés, en livraison, livrés) : plus d'annulation, d'assurance ni de changement d'adresse. */
+export const SHIPPED_SQL = "EXISTS (SELECT 1 FROM packages p WHERE p.order_id = orders.id AND p.status IN ('loaded', 'out_for_delivery', 'delivered'))";
 
 const isOps = (ctx) => hasRole(ctx, ['support', 'dispatcher']);
 const vendorOnly = (ctx) => ctx.member === 'vendor' && !ctx.isAdmin && !ctx.roles.length;
@@ -138,6 +146,8 @@ function orderStatements(ctx, o) {
       o.promised, o.token, o.note, ctx.user?.id ?? null, now, now),
     ...o.items.map((x) => db.prepare('INSERT INTO order_items (id, company_id, order_id, product_id, product_name, quantity, unit_price_fcfa, weight_g) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
       .bind(x.id, cid, o.id, x.product_id, x.name, x.qty, x.price, x.weight)),
+    // payée d'avance : la préparation s'ouvre tout de suite
+    ...(paid ? releaseStatements(ctx, { id: o.id, promised_at: o.promised, created_at: now }) : []),
   ];
 }
 
@@ -187,7 +197,7 @@ export async function createOrders(ctx, inputs, source) {
 /** Confirmation du paiement à la livraison (lg_confirm_cod_internal). Refus = { ok:false, error }. */
 export async function confirmCod(ctx, companyId, orderId, via) {
   const o = await ctx.db.prepare(
-    `SELECT o.payment_method, o.status, o.cod_confirmed_at,
+    `SELECT o.payment_method, o.status, o.cod_confirmed_at, o.promised_at, o.created_at,
             EXISTS (SELECT 1 FROM banned_numbers b JOIN customers c ON c.id = o.customer_id AND c.company_id = o.company_id
                      WHERE b.company_id = o.company_id AND b.phone_key = c.phone_key) AS banned
        FROM orders o WHERE o.id = ? AND o.company_id = ?`,
@@ -199,20 +209,32 @@ export async function confirmCod(ctx, companyId, orderId, via) {
     await audit(ctx, 'cod_confirm_refused_banned', 'order', orderId, { via });
     return { ok: false, error: 'banned_number' };
   }
-  if (!o.cod_confirmed_at) {
-    await ctx.db.prepare('UPDATE orders SET cod_confirmed_at = ?, cod_confirmed_via = ?, updated_at = ? WHERE id = ? AND company_id = ? AND cod_confirmed_at IS NULL')
-      .bind(ctx.now, via, ctx.now, orderId, companyId).run();
-  }
-  // C3 : la confirmation ouvrira ici la préparation (lg_release_order)
+  // confirmation + ouverture de la préparation dans le même lot (sans effet si elle est déjà ouverte)
+  // page de suivi publique : pas d'entreprise active, c'est celle de la commande
+  const c = ctx.company?.id === companyId ? ctx : { ...ctx, company: { ...(ctx.company ?? {}), id: companyId } };
+  await ctx.db.batch([
+    ctx.db.prepare('UPDATE orders SET cod_confirmed_at = ?, cod_confirmed_via = ?, updated_at = ? WHERE id = ? AND company_id = ? AND cod_confirmed_at IS NULL')
+      .bind(ctx.now, via, ctx.now, orderId, companyId),
+    ...releaseStatements(c, { id: orderId, promised_at: o.promised_at, created_at: o.created_at }),
+  ]);
   return { ok: true, confirmed: true };
 }
 
 /** Annulation tant que rien n'est parti (lg_cancel_unconfirmed) : transition conditionnelle, pas de verrou. */
 export async function cancelOrder(ctx, companyId, orderId, reason) {
-  const r = await ctx.db.prepare(
-    "UPDATE orders SET status = 'cancelled', cancelled_at = ?, cancel_reason = ?, updated_at = ? WHERE id = ? AND company_id = ? AND status IN ('pending', 'processing')",
-  ).bind(ctx.now, text(reason, 200), ctx.now, orderId, companyId).run();
-  // C3 : annuler aussi la tâche de préparation et les colis pas encore chargés (même lot)
+  const [r] = await ctx.db.batch([
+    ctx.db.prepare(
+      `UPDATE orders SET status = 'cancelled', cancelled_at = ?, cancel_reason = ?, updated_at = ?
+        WHERE id = ? AND company_id = ? AND status IN ('pending', 'processing') AND NOT ${SHIPPED_SQL}`,
+    ).bind(ctx.now, text(reason, 200), ctx.now, orderId, companyId),
+    // la préparation et les colis pas encore partis suivent (même lot)
+    ctx.db.prepare("UPDATE pick_tasks SET status = 'cancelled' WHERE order_id = ? AND company_id = ? AND status <> 'cancelled' AND (SELECT status FROM orders WHERE id = ?) = 'cancelled'")
+      .bind(orderId, companyId, orderId),
+    ctx.db.prepare(
+      `UPDATE packages SET status = 'cancelled', updated_at = ? WHERE order_id = ? AND company_id = ? AND status IN ('created', 'packed', 'staged')
+          AND (SELECT status FROM orders WHERE id = ?) = 'cancelled'`,
+    ).bind(ctx.now, orderId, companyId, orderId),
+  ]);
   if (r.meta.changes) return { ok: true };
   const o = await ctx.db.prepare('SELECT status FROM orders WHERE id = ? AND company_id = ?').bind(orderId, companyId).first();
   if (!o) return { ok: false, error: 'unknown_order' };
@@ -360,7 +382,7 @@ export default {
       if (fee == null) return { ok: false, error: 'value_too_high' };
       const r = await ctx.db.prepare(
         `UPDATE orders SET insured_value_fcfa = ?, total_fcfa = total_fcfa - insurance_fee_fcfa + ?, insurance_fee_fcfa = ?, updated_at = ?
-          WHERE id = ? AND company_id = ? AND status IN ('pending', 'processing')`,
+          WHERE id = ? AND company_id = ? AND status IN ('pending', 'processing') AND NOT ${SHIPPED_SQL}`,
       ).bind(value > 0 ? value : null, fee, fee, ctx.now, String(a.p_order ?? ''), ctx.company.id).run();
       if (!r.meta.changes) {
         const o = await ctx.db.prepare('SELECT status FROM orders WHERE id = ? AND company_id = ?').bind(String(a.p_order ?? ''), ctx.company.id).first();
@@ -498,33 +520,33 @@ export default {
     },
   },
 
-  // Recherche d'un produit (nom, code-barres, référence, code interne NXI-…). Emplacements : cycle C3.
-  lg_product_find: {
-    roles: ['picker', 'dock_chief', 'support'],
-    async handler(ctx, a) {
-      const q = String(a.p_q ?? '').trim();
-      if (q.length < 2) return [];
-      const r = await ctx.db.prepare(
-        `SELECT * FROM products WHERE company_id = ? AND (upper(barcode) = upper(?) OR upper(sku) = upper(?)
-            OR 'NXI-' || upper(substr(id, 1, 8)) = upper(?) OR name LIKE ?) ORDER BY name LIMIT 20`,
-      ).bind(ctx.company.id, q, q, q, like(q)).all();
-      return r.results.map((p) => ({ id: p.id, name: p.name, barcode: p.barcode, sku: p.sku, stock: p.stock, vendor: p.vendor_name, locations: [] }));
-    },
-  },
-
-  // Espace vendeur (version C2 : commandes et fiches ; colis, délais et ruptures arrivent avec la préparation, C3).
+  // Espace vendeur : suivre ses colis sans appeler, ses délais de préparation et ses ruptures (lg_vendor_overview).
   lg_vendor_overview: {
     roles: 'member',
     async handler(ctx) {
       if (ctx.member !== 'vendor' && !ctx.isAdmin) fail('forbidden', 403);
-      const v = ctx.isAdmin ? null : ctx.user.id;
-      const r = await ctx.db.prepare(
-        `SELECT (SELECT COUNT(*) FROM orders WHERE company_id = ?1 AND (?2 IS NULL OR vendor_id = ?2) AND status IN ('pending', 'processing')) AS to_prepare,
-                (SELECT COUNT(*) FROM orders WHERE company_id = ?1 AND (?2 IS NULL OR vendor_id = ?2) AND status = 'in_transit') AS in_transit,
-                (SELECT COUNT(*) FROM products WHERE company_id = ?1 AND (?2 IS NULL OR vendor_id = ?2) AND is_shippable = 1 AND active = 1
-                    AND (weight_g IS NULL OR (barcode IS NULL AND sku IS NULL))) AS products_missing_data`,
-      ).bind(ctx.company.id, v).first();
-      return { ...r, returns: 0, avg_prep_hours_30d: null, stockout_pct_30d: null, packages: [] };
+      const v = ctx.isAdmin ? null : ctx.user.id;   // l'administrateur voit toute l'entreprise
+      const since = new Date(Date.parse(ctx.now) - 30 * 86400000).toISOString();
+      const [k, pk] = await ctx.db.batch([
+        ctx.db.prepare(
+          `SELECT (SELECT COUNT(*) FROM pick_tasks WHERE company_id = ?1 AND (?2 IS NULL OR vendor_id = ?2) AND status IN ('todo', 'picking')) AS to_prepare,
+                  (SELECT COUNT(*) FROM packages p JOIN orders o ON o.id = p.order_id WHERE p.company_id = ?1 AND (?2 IS NULL OR o.vendor_id = ?2)
+                      AND p.status IN ('staged', 'loaded', 'out_for_delivery')) AS in_transit,
+                  (SELECT COUNT(*) FROM packages p JOIN orders o ON o.id = p.order_id WHERE p.company_id = ?1 AND (?2 IS NULL OR o.vendor_id = ?2)
+                      AND p.status IN ('failed', 'returned_hub')) AS returns,
+                  (SELECT round(avg((julianday(done_at) - julianday(created_at)) * 24), 1) FROM pick_tasks
+                    WHERE company_id = ?1 AND (?2 IS NULL OR vendor_id = ?2) AND done_at > ?3) AS avg_prep_hours_30d,
+                  (SELECT round(100.0 * sum(l.status = 'short') / nullif(count(*), 0), 1) FROM pick_lines l JOIN pick_tasks t ON t.id = l.task_id
+                    WHERE t.company_id = ?1 AND (?2 IS NULL OR t.vendor_id = ?2) AND t.done_at > ?3) AS stockout_pct_30d,
+                  (SELECT COUNT(*) FROM products WHERE company_id = ?1 AND (?2 IS NULL OR vendor_id = ?2) AND is_shippable = 1 AND active = 1
+                      AND (weight_g IS NULL OR (barcode IS NULL AND sku IS NULL))) AS products_missing_data`,
+        ).bind(ctx.company.id, v, since),
+        ctx.db.prepare(
+          `SELECT p.code, p.status, o.number, p.zone, p.updated_at, p.attempts FROM packages p JOIN orders o ON o.id = p.order_id
+            WHERE p.company_id = ? AND (? IS NULL OR o.vendor_id = ?) AND p.updated_at > ? ORDER BY p.updated_at DESC LIMIT 200`,
+        ).bind(ctx.company.id, v, v, since),
+      ]);
+      return { ...k.results[0], packages: pk.results.map(({ number, ...p }) => ({ ...p, order_short: String(number) })) };
     },
   },
 

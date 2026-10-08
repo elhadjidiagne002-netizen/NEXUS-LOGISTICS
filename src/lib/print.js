@@ -27,7 +27,7 @@ export async function printLabels(labels) {
         <div class="code">${esc(l.code)}</div><div class="n">colis ${l.seq} / ${l.count}</div>
         <div>Commande ${esc(l.order_short)}${l.quarter ? ' · ' + esc(l.quarter) : ''}</div>
         <div class="b">${esc(kg)}${hand ? ' · ' + esc(hand) : ''}${l.cod ? ' · À ENCAISSER' : ''}</div></div></div>
-      <div class="foot">Préparé le ${dt(l.packed_at)}${l.hub ? ' · ' + esc(l.hub) : ''} · NEXUS LOGISTICS</div></section>`;
+      <div class="foot">Préparé le ${dt(l.packed_at)}${l.hub ? ' · ' + esc(l.hub) : ''} · ${esc(l.company ?? 'NEXUS LOGISTICS')}</div></section>`;
   }));
   open('Étiquettes', `@page{size:105mm 148mm;margin:5mm}.lbl{height:138mm;display:flex;flex-direction:column;gap:4mm;page-break-after:always;border:1px solid #000;padding:4mm}
   .zone{font-size:30pt;font-weight:900;text-transform:uppercase;border-bottom:3px solid #000;padding-bottom:2mm;line-height:1}

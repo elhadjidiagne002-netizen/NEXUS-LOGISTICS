@@ -18,8 +18,10 @@ import socle from './socle.js';
 import tarifs from './tarifs.js';
 import commandes from './commandes.js';
 import suivi from './suivi.js';
+import preparation from './preparation.js';
+import entrepot from './entrepot.js';
 
-export const REGISTRY = { ...socle, ...tarifs, ...commandes, ...suivi };
+export const REGISTRY = { ...socle, ...tarifs, ...commandes, ...suivi, ...preparation, ...entrepot };
 
 
 async function buildContext(request, env) {

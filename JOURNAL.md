@@ -2,6 +2,18 @@
 
 Le plus récent en premier.
 
+## 08/10/2026 — Cycle C3 (Cloudflare) : préparation et entrepôt
+- **Fait** : `migrations/0003_preparation.sql` ; modules `server/rpc/preparation.js` (file, prise, scans, rupture,
+  colisage, mise à quai, étiquettes, double contrôle, vagues, productivité), `entrepot.js` (emplacements, rangement
+  par lot, inventaire, péremption, traçabilité, fiche colis) et `stock.js` (FEFO en JavaScript : remplace les
+  déclencheurs Postgres de prélèvement et de cohérence des lots). Une commande confirmée ou payée d'avance ouvre sa
+  préparation dans le même lot ; l'annulation emporte préparation et colis non partis ; le montant dû retire les
+  ruptures. Réglage `prep_at_vendor` (préparation chez le vendeur). Le rejeu d'une action renvoie `replayed: true`.
+- **Nouveau procédé** : `guard()` + `runBatch()` (`server/rpc/core.js`) — une assertion SQL dans un lot D1 annule
+  tout le lot si l'état a changé entre la lecture et l'écriture (table `batch_guards` avec CHECK). Remplace le verrou.
+- **État** : 32 tests serveur, 12 unitaires, builds OK ; Préparation et Entrepôt vérifiés dans Chromium.
+- **À appliquer en ligne** : `npx wrangler d1 migrations apply nexus-logistics --remote` → `0003_preparation.sql`.
+
 ## 08/10/2026 — Cycle C2 (Cloudflare) : commandes, zones, tarifs, suivi client
 - **Fait** : migration `migrations/0002_commandes.sql` (commandes, lignes, clients, catalogue, zones, grille, suppléments,
   numéros bannis, demandes, notes, clés d'API ; `company_id` partout) ; modules `server/rpc/tarifs.js`,
