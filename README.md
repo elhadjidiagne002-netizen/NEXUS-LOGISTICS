@@ -71,9 +71,9 @@ npm test
 | 11 | **Plusieurs quais** : arrivée du véhicule, file d'attente, affectation d'un quai, temps moyens de chargement et d'attente | `/quai` → Quais, app chauffeur |
 | 12 | **Tableaux par axe** (zone, vendeur, chauffeur, véhicule, jour, heure) et **export Excel** | `/analytique` → Indicateurs |
 | 13 | **Coûts** : par véhicule (au km, par colis), marge par zone, coût des échecs | `/analytique` → Coûts |
+| 14 | **Assurance colis** (prime au devis, plafond d'indemnisation), **avoir** de l'indemnité, **accord du client** depuis sa page de suivi | `/sav` → Incidents, `/suivi/:jeton` |
 | 15 | **Appareils** : liste des téléphones, déconnexion à distance, blocage d'un appareil perdu (appliqué côté serveur) | `/admin` → Appareils |
 | 16 | **Relevé de reversement vendeur** (indicatif) : produits livrés − commission − frais de retour ; espèces reversables après rapprochement | `/vendeur` → Reversements, `/factures` |
-| 14 | **Assurance colis** (prime au devis, plafond d'indemnisation), **avoir** de l'indemnité, **accord du client** depuis sa page de suivi | `/sav` → Incidents, `/suivi/:jeton` |
 
 Les montants proposés (frais par cause de retour, plafond sans assurance, prime, suppléments)
 sont des valeurs de départ **à valider** ; tous sont réglables dans l'administration.
