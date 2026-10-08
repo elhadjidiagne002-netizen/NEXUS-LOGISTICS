@@ -95,21 +95,28 @@ function Returns() {
 // Contrôle du retour (P2) : état du produit, puis décision — remise en vente, retour vendeur ou rebut
 function Inspect() {
   const { data, reload } = useRpc('lg_returns_to_inspect', {}, { refresh: 30000 });
+  const causes = useRpc('lg_return_causes', {});
   const [cur, setCur] = useState(null);
+  const cause = (causes.data ?? []).find((c) => c.code === cur?.cause);
   const [run, busy] = useAction();
   return <Card><h2>Contrôle des retours</h2>
     {!data?.length ? <Empty icon="check">Aucun colis à contrôler.</Empty> : <div className="list">{data.map((p) =>
       <div key={p.code} className="line"><span className="grow"><b className="mono">{p.code}</b> <Badge kind={p.direction === 'return' ? 'info' : 'todo'}>{p.direction === 'return' ? 'retour client' : `${p.attempts} échecs`}</Badge>
         <div className="small muted">{p.items} · {p.vendor} · {ago(p.since)}</div></span>
-        <Btn size="sm" kind="primary" onClick={() => setCur({ ...p, condition: 'bon', decision: p.direction === 'return' ? 'restock' : 'vendor' })}>Contrôler</Btn></div>)}</div>}
+        <Btn size="sm" kind="primary" onClick={() => setCur({ ...p, condition: 'bon', decision: p.direction === 'return' ? 'restock' : 'vendor', cause: p.cause ?? p.suggested_cause ?? null })}>Contrôler</Btn></div>)}</div>}
     {cur && <Modal title={`Contrôle · ${cur.code}`} onClose={() => setCur(null)}><div className="stack">
       <p style={{ margin: 0 }}>{cur.items}</p>
       <Field label="État du produit"><Chips options={[['neuf', 'Neuf'], ['bon', 'Bon état'], ['abime', 'Abîmé'], ['inutilisable', 'Inutilisable']]} value={cur.condition} onChange={(condition) => setCur({ ...cur, condition })} /></Field>
       <Field label="Décision"><Chips options={[['restock', 'Remettre en vente'], ['vendor', 'Rendre au vendeur'], ['scrap', 'Rebut']]} value={cur.decision} onChange={(decision) => setCur({ ...cur, decision })} /></Field>
       {cur.decision === 'restock' && !['neuf', 'bon'].includes(cur.condition) && <div className="flash todo">Seul un produit neuf ou en bon état se remet en vente.</div>}
+      <Field label="Cause du retour"><Chips options={(causes.data ?? []).filter((c) => c.active).map((c) => [c.code, c.label])} value={cur.cause} onChange={(c) => setCur({ ...cur, cause: c, cause_touched: true })} /></Field>
+      {cause && <div className="small muted">{cur.suggested_cause === cause.code && !cur.cause_touched ? 'Cause suggérée d\'après le motif. ' : ''}Frais : {{ vendor: 'à la charge du vendeur', customer: 'à la charge du client', nexus: 'à la charge de NEXUS', none: 'aucun' }[cause.payer]}
+        {cause.payer !== 'none' && cause.fee_mode !== 'none' ? ` (${cause.fee_mode === 'delivery' ? 'frais de livraison de la commande' : formatF(cause.fee_fcfa)})` : ''}.</div>}
       <Field label="Remarque"><input className="input" value={cur.note ?? ''} onChange={(e) => setCur({ ...cur, note: e.target.value })} /></Field>
       <p className="small muted">Le client est remboursé par avoir s'il avait été facturé. Le rebut ouvre un incident.</p>
-      <Btn kind="primary" size="xl" disabled={busy} onClick={() => run(async () => {
+      <Btn kind="primary" size="xl" disabled={busy || !cur.cause} onClick={() => run(async () => {
+        const k = await act('lg_return_classify', { p_code: cur.code, p_cause: cur.cause, p_note: cur.note || null }, `Cause ${cur.code}`);
+        if (!k.ok && !k.queued) return k;
         const r = await act('lg_return_inspect', { p_code: cur.code, p_condition: cur.condition, p_decision: cur.decision, p_note: cur.note || null }, `Contrôle ${cur.code}`);
         if (r.ok) { setCur(null); reload(); } return r;
       }, { ok: 'Décision enregistrée' })}>Valider</Btn></div></Modal>}

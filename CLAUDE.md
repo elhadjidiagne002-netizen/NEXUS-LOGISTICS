@@ -66,12 +66,15 @@ base Supabase** (projet `pqcqbstbdujzaclsiosv`). Toute la logique métier est en
     (`lg_put_away`) : `drop function` de l'ancienne d'abord, sinon deux surcharges coexistent.
 13. **Test dépendant du jour** : la démo déclare un pic le vendredi ; un test de prévision doit
     remettre `peak_days` à vide (il échouait chaque jeudi).
-14. **Bash Windows** : les heredocs Python avec apostrophes cassent sous Git Bash ; passer par
+14. **`Field` + `Chips`** : un `<label>` autour de boutons active le premier quand on touche
+    l'intitulé ; `Field` rend un `<div>` si son enfant est un `Chips`. Ne pas envelopper un groupe de
+    boutons dans un `<label>` à la main.
+15. **Bash Windows** : les heredocs Python avec apostrophes cassent sous Git Bash ; passer par
     un fichier de script.
 
 ## Tests
-- `npm test` : 62 tests (PGlite = Postgres 18 en WebAssembly, pgcrypto inclus), dont un
-  fichier par cycle (`test/sql/cycle1..7.test.mjs`) qui part de la journée de démo.
+- `npm test` : 65 tests (PGlite = Postgres 18 en WebAssembly, pgcrypto inclus), dont un
+  fichier par cycle (`test/sql/cycle1..8.test.mjs`) qui part de la journée de démo.
 - `test/helpers/db.mjs` : `createDb()` charge le miroir + migrations + données ;
   `rpc(uid, nom, args)` appelle comme `supabase.rpc` sous l'identité `uid`.
 - Le miroir `supabase/stub/prod_subset.sql` a été relevé **en lecture seule** sur la prod

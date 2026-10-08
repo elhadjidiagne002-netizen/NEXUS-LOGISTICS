@@ -1,7 +1,9 @@
 // Module 14 — Les douze indicateurs de pilotage (chapitre 12), calculés depuis le journal de scans.
 import React, { useState } from 'react';
 import { PickProductivity } from '../components/productivity.jsx';
-import { useRpc, Card, Badge, Empty, Icon, Loading, ErrorBox, PageHead, Field, Chips, Stat, Tabs, formatF, dmy } from '../components/ui.jsx';
+import { rpc } from '../lib/backend.js';
+import { useMe } from '../App.jsx';
+import { useRpc, useAction, Card, Badge, Btn, Modal, Empty, Icon, Loading, ErrorBox, PageHead, Field, Chips, Stat, Tabs, formatF, dmy } from '../components/ui.jsx';
 
 const iso = (d) => d.toISOString().slice(0, 10);
 const pct = (v) => (v == null ? '—' : `${v} %`);
@@ -10,8 +12,8 @@ export default function Analytics() {
   const [tab, setTab] = useState('kpis');
   return <>
     <PageHead title="Pilotage" back="/" sub="Mesurer ce qui coûte et ce qui fâche, anticiper la charge, repérer les dérives." />
-    <Tabs value={tab} onChange={setTab} tabs={[['kpis', 'Indicateurs'], ['forecast', 'Prévision'], ['anomalies', 'Anomalies'], ['drivers', 'Chauffeurs'], ['picking', 'Préparation']]} />
-    {tab === 'kpis' && <Kpis />}{tab === 'forecast' && <Forecast />}{tab === 'anomalies' && <Anomalies />}{tab === 'drivers' && <Leaderboard />}{tab === 'picking' && <PickProductivity />}
+    <Tabs value={tab} onChange={setTab} tabs={[['kpis', 'Indicateurs'], ['forecast', 'Prévision'], ['anomalies', 'Anomalies'], ['drivers', 'Chauffeurs'], ['picking', 'Préparation'], ['returns', 'Retours']]} />
+    {tab === 'kpis' && <Kpis />}{tab === 'forecast' && <Forecast />}{tab === 'anomalies' && <Anomalies />}{tab === 'drivers' && <Leaderboard />}{tab === 'picking' && <PickProductivity />}{tab === 'returns' && <ReturnStats />}
   </>;
 }
 
@@ -108,5 +110,60 @@ function Leaderboard() {
         <td className="num">{r.first_attempt_pct ?? '—'}{r.first_attempt_pct != null && ' %'}</td><td className="num">{r.on_time_pct ?? '—'}{r.on_time_pct != null && ' %'}</td>
         <td className="num">★ {Number(r.rating).toFixed(1)}</td><td className="num">{formatF(r.earnings)}</td><td className="num"><b>{r.score}</b></td></tr>)}</tbody></table></div></Card>
     <p className="small muted">Score : volume (40) + réussite à la 1re présentation (30) + ponctualité (20) + note des clients (10).</p>
+  </div>;
+}
+
+// Retours : frais et causes (P2) — par motif, par vendeur, par quartier ; réglage des causes par l'administrateur
+const PAYER = { vendor: 'Vendeur', customer: 'Client', nexus: 'NEXUS', none: 'Personne' };
+const PAYER_KIND = { vendor: 'todo', customer: 'info', nexus: 'bad', none: '' };
+function ReturnStats() {
+  const [range, setRange] = useState('30');
+  const to = new Date(); const from = new Date(Date.now() - (Number(range) - 1) * 864e5);
+  const { data, error, loading } = useRpc('lg_return_stats', { p_from: iso(from), p_to: iso(to) });
+  const me = useMe();
+  const causes = useRpc('lg_return_causes', {});
+  const [edit, setEdit] = useState(null);
+  const [run, busy] = useAction();
+  const k = data?.totals;
+  return <div className="stack">
+    <Chips options={[['7', '7 jours'], ['30', '30 jours'], ['90', '90 jours']]} value={range} onChange={setRange} />
+    <ErrorBox error={error} />
+    {loading && !data ? <Loading /> : data && <>
+      <div className="stats">
+        <Stat icon="refresh" label="retours classés" value={k.returns} />
+        <Stat icon="store" c="#ea580c" label="frais vendeurs" value={formatF(k.vendor_fcfa)} />
+        <Stat icon="user" c="#2563eb" label="frais clients" value={formatF(k.customer_fcfa)} />
+        <Stat icon="alert" c="#dc2626" label="à la charge de NEXUS" value={formatF(k.nexus_fcfa)} />
+        <Stat icon="clock" label="retours sans cause" value={k.unclassified} kind={k.unclassified ? 'todo' : 'ok'} />
+      </div>
+      <div className="grid cols-2">
+        <Card><h3>Par motif</h3>{!data.by_cause.length ? <Empty icon="check">Aucun retour classé.</Empty> :
+          <div className="list">{data.by_cause.map((c) => <div key={c.cause} className="line"><span className="grow">{c.label}
+            <div><Badge kind={PAYER_KIND[c.payer]}>{PAYER[c.payer]}</Badge></div></span>
+            <span style={{ textAlign: 'right' }}><b>{c.count}</b><div className="small muted">{formatF(c.amount_fcfa)}</div></span></div>)}</div>}</Card>
+        <Card><h3>Par quartier</h3>{!data.by_zone.length ? <Empty icon="map">Rien.</Empty> :
+          <div className="list">{data.by_zone.map((z) => <div key={z.zone} className="line"><span className="grow">{z.zone}
+            <div className="small muted">{Object.entries(z.causes).map(([c, n]) => `${(causes.data ?? []).find((x) => x.code === c)?.label ?? c} : ${n}`).join(' · ')}</div></span><b>{z.count}</b></div>)}</div>}</Card>
+      </div>
+      <Card><h3>Par vendeur</h3>{!data.by_vendor.length ? <Empty icon="store">Rien.</Empty> :
+        <div className="scroll-x"><table className="tbl"><thead><tr><th>Vendeur</th><th className="num">Retours</th><th className="num">Dont sa faute</th>
+          <th className="num">Livrées</th><th className="num">Taux de retour</th><th className="num">Frais à sa charge</th></tr></thead>
+          <tbody>{data.by_vendor.map((v) => <tr key={v.vendor_id ?? v.name}><td>{v.name}</td><td className="num">{v.count}</td><td className="num">{v.vendor_fault}</td>
+            <td className="num">{v.delivered}</td><td className="num" style={{ color: v.return_pct > 10 ? 'var(--bad)' : undefined }}>{v.return_pct ?? '—'}{v.return_pct != null && ' %'}</td>
+            <td className="num">{formatF(v.amount_fcfa)}</td></tr>)}</tbody></table></div>}
+        <p className="small muted">Frais constatés, pas encaissés : la retenue sur reversement ou la facturation au client reste une décision.</p></Card>
+    </>}
+    <Card><h3>Causes et frais</h3><div className="list">{(causes.data ?? []).map((c) => <div key={c.code} className="line">
+      <span className="grow" style={{ opacity: c.active ? 1 : .5 }}>{c.label}<div className="small muted">{PAYER[c.payer]} · {c.payer === 'none' || c.fee_mode === 'none' ? 'sans frais' : c.fee_mode === 'delivery' ? 'frais de livraison de la commande' : formatF(c.fee_fcfa)}</div></span>
+      {me?.is_admin && <Btn size="sm" onClick={() => setEdit({ ...c })}>Modifier</Btn>}</div>)}</div></Card>
+    {edit && <Modal title={edit.label} onClose={() => setEdit(null)}><div className="stack">
+      <Field label="Libellé"><input className="input" value={edit.label} onChange={(e) => setEdit({ ...edit, label: e.target.value })} /></Field>
+      <Field label="Qui supporte les frais"><Chips options={Object.entries(PAYER)} value={edit.payer} onChange={(payer) => setEdit({ ...edit, payer })} /></Field>
+      <Field label="Montant"><Chips options={[['none', 'Aucun'], ['delivery', 'Frais de livraison'], ['fixed', 'Montant fixe']]} value={edit.fee_mode} onChange={(fee_mode) => setEdit({ ...edit, fee_mode })} /></Field>
+      {edit.fee_mode === 'fixed' && <Field label="Montant fixe (F CFA)"><input className="input" inputMode="numeric" value={edit.fee_fcfa} onChange={(e) => setEdit({ ...edit, fee_fcfa: e.target.value.replace(/\D/g, '') })} /></Field>}
+      <Chips options={[['on', 'Active'], ['off', 'Désactivée']]} value={edit.active ? 'on' : 'off'} onChange={(v) => setEdit({ ...edit, active: v === 'on' })} />
+      <Btn kind="primary" disabled={busy} onClick={() => run(async () => {
+        const r = await rpc('lg_return_cause_save', { p: { ...edit, fee_fcfa: Number(edit.fee_fcfa) || 0 } }); setEdit(null); causes.reload(); return r;
+      }, { ok: 'Cause enregistrée' })}>Enregistrer</Btn></div></Modal>}
   </div>;
 }

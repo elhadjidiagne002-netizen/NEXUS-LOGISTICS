@@ -102,7 +102,12 @@ export const Stat = ({ label, value, kind = '', icon, c }) => <div className={`s
 export const Empty = ({ children, icon = 'inbox' }) => <div className="empty"><span className="chip-ico"><Icon name={icon} size={22} /></span><div>{children}</div></div>;
 export const Loading = () => <div className="stack"><div className="skeleton" /><div className="skeleton" /></div>;
 export const ErrorBox = ({ error }) => error ? <div className="flash bad"><Icon name="alert" />{errText(error)}</div> : null;
-export function Field({ label, children }) { return <label className="field"><span>{label}</span>{children}</label>; }
+// <label> pour un champ de saisie ; <div> pour un groupe de choix : un <label> qui contient des
+// boutons « clique » le premier quand on touche son intitulé (toucher « Décision » choisissait la 1re option).
+export function Field({ label, children }) {
+  const Tag = React.isValidElement(children) && children.type === Chips ? 'div' : 'label';
+  return <Tag className="field"><span>{label}</span>{children}</Tag>;
+}
 export function Tabs({ tabs, value, onChange }) {
   return <div className="tabs" role="tablist">{tabs.map(([k, l]) =>
     <button key={k} role="tab" aria-selected={value === k} className={value === k ? 'on' : ''} onClick={() => onChange(k)}>{l}</button>)}</div>;

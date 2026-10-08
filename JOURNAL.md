@@ -2,6 +2,23 @@
 
 Le plus récent en premier.
 
+## 08/10/2026 — Cycle 8 : retours, frais et causes (module 08, P2)
+- **Causes de retour** (`lg_return_causes`) : qui supporte les frais (vendeur, client, NEXUS,
+  personne) et combien (aucun, frais de livraison de la commande, montant fixe). **Valeurs proposées
+  à valider** (chapitre 14) : erreur vendeur et produit défectueux → vendeur ; changement d'avis,
+  refus à la porte, client absent → client ; abîmé en transport → NEXUS. Réglables par l'admin
+  (`lg_return_cause_save`, Pilotage → Retours → Modifier).
+- **Classement** (`lg_return_classify`) au contrôle du retour, au quai : la cause est **suggérée**
+  (`lg_return_suggest`) d'après le motif d'échec du chauffeur ou la demande du client ; frais
+  **constatés** dans `lg_return_charges` (un par colis, reclassement tracé), **pas encaissés** :
+  retenue sur reversement ou facturation au client restent une décision humaine.
+- **Statistiques** (`lg_return_stats`) : par motif, par vendeur (taux de retour, part de sa faute,
+  frais à sa charge), par quartier ; retours revenus sans cause.
+- **Défaut d'interface corrigé partout** : `Field` rendait un `<label>` autour des groupes de choix ;
+  toucher l'intitulé (« Décision », « État du produit »…) sélectionnait la 1re option. `Field` rend
+  désormais un `<div>` pour un groupe de `Chips` (9 écrans concernés, aucune autre modification).
+- Tests : 65/65.
+
 ## 08/10/2026 — Cycle 7 : productivité de la préparation (module 01, P2)
 - `lg_pick_productivity(p_from, p_to)` (lecture seule ; chef de quai, répartiteur, comptable,
   service client) : par préparateur, commandes, lignes, unités, temps, **lignes par heure**, saisie
