@@ -1,5 +1,11 @@
 // Codes renvoyés par les fonctions de la base → phrases courtes pour le terrain.
 const M = {
+  // produits et stock
+  duplicate_code: 'Ce code-barres ou cette référence est déjà utilisé par un autre produit.',
+  location_required: 'Un lot ou une date de péremption se range à un emplacement : choisissez-en un.',
+  same_location: "L'emplacement de départ et d'arrivée est le même.",
+  no_rows: 'Le fichier ne contient aucun produit.',
+  too_many_rows: 'Trop de lignes en une fois (200 au plus).',
   // version Cloudflare (comptes et entreprises)
   auth: 'Connectez-vous pour continuer.',
   no_company: "Ce compte n'est rattaché à aucune entreprise (ou en a été retiré).",

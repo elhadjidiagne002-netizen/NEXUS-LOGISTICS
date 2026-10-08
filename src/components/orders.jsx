@@ -1,11 +1,11 @@
 // Version Cloudflare (cycle C2) — commandes saisies chez l'entreprise : liste, saisie au téléphone,
 // import par fichier (gabarit CSV), catalogue logistique. Les commandes des boutiques en ligne arrivent
 // aussi par l'API par clé (Administration → API).
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { rpc } from '../lib/backend.js';
 import { errText } from '../lib/errors.js';
 import { parseOrdersCsv } from '../lib/csv.js';
-import { useRpc, useAction, Btn, Card, Badge, Empty, Loading, ErrorBox, Modal, Field, Chips, HANDLING, formatF, dmy, hhmm, ago } from './ui.jsx';
+import { useRpc, useAction, Btn, Card, Badge, Empty, Loading, ErrorBox, Modal, Field, Chips, formatF, dmy, hhmm, ago } from './ui.jsx';
 
 const ST = { pending: ['À traiter', 'todo'], processing: ['En préparation', 'info'], in_transit: ['En route', 'info'], delivered: ['Livrée', 'ok'], cancelled: ['Annulée', ''] };
 const SRC = { manual: 'saisie', csv: 'fichier', api: 'boutique en ligne' };
@@ -160,40 +160,3 @@ function ImportOrders({ onClose, onDone }) {
   </div></Modal>;
 }
 
-// ----------------------------------------------------------------- catalogue
-export function Catalogue() {
-  const [q, setQ] = useState('');
-  const { data, error, loading, reload } = useRpc('lg_products_list', { p_all: true });
-  const [edit, setEdit] = useState(null);
-  const list = useMemo(() => (data ?? []).filter((p) => !q || `${p.name} ${p.sku ?? ''} ${p.barcode ?? ''}`.toLowerCase().includes(q.toLowerCase())), [data, q]);
-  return <div className="stack">
-    <div className="row"><input className="input" style={{ flex: 1 }} placeholder="Filtrer" value={q} onChange={(e) => setQ(e.target.value)} />
-      <Btn kind="primary" onClick={() => setEdit({ name: '', price_fcfa: '', weight_kg: '', sku: '', barcode: '', handling: [] })}>＋ Produit</Btn></div>
-    <ErrorBox error={error} />
-    {loading && !data ? <Loading /> : !list.length ? <Card><Empty>Aucun produit. Le catalogue est facultatif : il préremplit les commandes (prix, poids).</Empty></Card>
-      : <Card><div className="list">{list.map((p) => <div key={p.id} className="line" style={{ opacity: p.active ? 1 : .5 }}><span className="grow"><b>{p.name}</b>
-        <div className="small muted">{formatF(p.price_fcfa)} · {p.weight_g ? `${p.weight_g / 1000} kg` : 'poids ?'}{p.sku ? ` · ${p.sku}` : ''}{p.barcode ? ` · ${p.barcode}` : ''}{p.vendor ? ` · ${p.vendor}` : ''}
-          {p.handling.map((h) => ` · ${h}`).join('')}</div></span>
-        <Btn size="sm" onClick={() => setEdit({ ...p, weight_kg: p.weight_g ? String(p.weight_g / 1000) : '', price_fcfa: String(p.price_fcfa) })}>Modifier</Btn></div>)}</div></Card>}
-    {edit && <ProductForm p={edit} onClose={() => setEdit(null)} onDone={() => { setEdit(null); reload(); }} />}
-  </div>;
-}
-
-function ProductForm({ p, onClose, onDone }) {
-  const [f, setF] = useState(p); const [run, busy] = useAction();
-  const s = (k) => (e) => setF({ ...f, [k]: e.target.value });
-  return <Modal title={p.id ? p.name : 'Nouveau produit'} onClose={onClose}><div className="stack">
-    <Field label="Nom"><input className="input" value={f.name} onChange={s('name')} /></Field>
-    <div className="grid cols-2"><Field label="Prix (F)"><input className="input" inputMode="numeric" value={f.price_fcfa} onChange={s('price_fcfa')} /></Field>
-      <Field label="Poids (kg)"><input className="input" inputMode="decimal" value={f.weight_kg} onChange={s('weight_kg')} /></Field>
-      <Field label="Référence"><input className="input" value={f.sku ?? ''} onChange={s('sku')} /></Field>
-      <Field label="Code-barres"><input className="input" value={f.barcode ?? ''} onChange={s('barcode')} /></Field></div>
-    <Field label="Manutention"><Chips multi options={HANDLING} value={f.handling ?? []} onChange={(v) => setF({ ...f, handling: v })} /></Field>
-    {p.id && <label className="check"><input type="checkbox" checked={f.active !== false} onChange={(e) => setF({ ...f, active: e.target.checked })} /> Actif</label>}
-    <Btn kind="primary" disabled={busy || !f.name?.trim()} onClick={() => run(async () => {
-      const r = await rpc('lg_product_upsert', { p: { id: p.id, name: f.name, price_fcfa: Number(f.price_fcfa) || 0, sku: f.sku || null, barcode: f.barcode || null,
-        weight_g: f.weight_kg ? Math.round(Number(String(f.weight_kg).replace(',', '.')) * 1000) : null, handling: f.handling, active: f.active !== false,
-        length_cm: f.length_cm ?? null, width_cm: f.width_cm ?? null, height_cm: f.height_cm ?? null, stock: f.stock ?? null } });
-      onDone(); return r;
-    }, { ok: 'Produit enregistré' })}>Enregistrer</Btn></div></Modal>;
-}

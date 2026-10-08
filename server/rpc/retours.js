@@ -6,6 +6,7 @@ import { fail, audit, idempotent, text, int, uuid, guard, runBatch, plusMinutes 
 import { normCode } from './preparation.js';
 import { tripFor, refreshStatement } from './voyages.js';
 import { UNRETURNED_SQL, FAILURE_REASONS } from './terrain.js';
+import { stockMoveStatements } from './stock.js';
 import { tryReconcile } from './caisse.js';
 import { creditPackage } from './factures.js';
 import { notifyOrder, notifyPerson, sendLater, hhmm } from './messages.js';
@@ -43,14 +44,14 @@ function suggest(p) {
 async function returnToVendor(ctx, p, reason, extra = []) {
   const cid = ctx.company.id;
   const o = await ctx.db.prepare('SELECT vendor_id FROM orders WHERE id = ? AND company_id = ?').bind(p.order_id, cid).first();
+  const back = (await ctx.db.prepare('SELECT oi.product_id, sum(pi.quantity) AS qty FROM package_items pi JOIN order_items oi ON oi.id = pi.order_item_id WHERE pi.package_id = ? AND oi.product_id IS NOT NULL GROUP BY oi.product_id')
+    .bind(p.id).all()).results;
   await runBatch(ctx, [
     guard(ctx.db, "(SELECT status FROM packages WHERE id = ?) = 'returned_hub'", [p.id]),
     ...extra,
     ctx.db.prepare("UPDATE packages SET status = 'returned_vendor', holder_type = 'vendor', holder_id = ?, updated_at = ? WHERE id = ? AND company_id = ?").bind(o?.vendor_id ?? null, ctx.now, p.id, cid),
     ctx.db.prepare("UPDATE order_items SET line_status = 'cancelled' WHERE company_id = ? AND id IN (SELECT order_item_id FROM package_items WHERE package_id = ?)").bind(cid, p.id),
-    ctx.db.prepare(`UPDATE products SET stock = coalesce(stock, 0) + (SELECT sum(pi.quantity) FROM package_items pi JOIN order_items oi ON oi.id = pi.order_item_id
-        WHERE pi.package_id = ? AND oi.product_id = products.id), updated_at = ?
-      WHERE company_id = ? AND id IN (SELECT oi.product_id FROM package_items pi JOIN order_items oi ON oi.id = pi.order_item_id WHERE pi.package_id = ?)`).bind(p.id, ctx.now, cid, p.id),
+    ...back.flatMap((it) => stockMoveStatements(ctx, { product: it.product_id, delta: it.qty, kind: 'return', order: p.order_id, ref: p.code, reason: `retour au vendeur : ${reason}` })),
     ctx.db.prepare("INSERT INTO scan_events (company_id, client_event_id, package_id, event, actor_id, hub_id, device_at, meta) VALUES (?, ?, ?, 'return_vendor', ?, ?, ?, ?)")
       .bind(cid, uuid(), p.id, ctx.user.id, p.hub_id, ctx.now, JSON.stringify({ reason })),
     ctx.db.prepare(`UPDATE orders SET status = 'cancelled', cancelled_at = ?, cancel_reason = ?, updated_at = ? WHERE id = ? AND company_id = ? AND status <> 'delivered'
@@ -231,11 +232,9 @@ export default {
         ];
         if (a.p_decision === 'restock') {
           // remise en vente : stock du site et rayon le plus garni du hub
-          stmts.push(ctx.db.prepare(`UPDATE products SET stock = coalesce(stock, 0) + (SELECT sum(pi.quantity) FROM package_items pi JOIN order_items oi ON oi.id = pi.order_item_id
-              WHERE pi.package_id = ? AND oi.product_id = products.id), updated_at = ?
-            WHERE company_id = ? AND id IN (SELECT oi.product_id FROM package_items pi JOIN order_items oi ON oi.id = pi.order_item_id WHERE pi.package_id = ?)`).bind(p.id, ctx.now, cid, p.id));
           const items = (await ctx.db.prepare('SELECT oi.product_id, pi.quantity FROM package_items pi JOIN order_items oi ON oi.id = pi.order_item_id WHERE pi.package_id = ? AND oi.product_id IS NOT NULL').bind(p.id).all()).results;
           for (const it of items) {
+            stmts.push(...stockMoveStatements(ctx, { product: it.product_id, delta: it.quantity, kind: 'return', order: p.order_id, ref: p.code, reason: 'remis en stock après contrôle' }));
             stmts.push(ctx.db.prepare(`UPDATE product_locations SET qty = qty + ?, updated_at = ? WHERE product_id = ? AND company_id = ? AND location_id = (
                 SELECT pl.location_id FROM product_locations pl JOIN stock_locations l ON l.id = pl.location_id WHERE pl.product_id = ? AND l.hub_id = ? ORDER BY pl.qty DESC LIMIT 1)`)
               .bind(it.quantity, ctx.now, it.product_id, cid, it.product_id, p.hub_id));

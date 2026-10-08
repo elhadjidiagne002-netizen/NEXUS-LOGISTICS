@@ -2,7 +2,7 @@
 // inventaire tournant, péremption et rebut, traçabilité d'un lot (rappel), fiche colis (chaîne de garde).
 // Portage de 20261008000400_cycle4_entrepot.sql et 20261008000600_cycle6_lots_peremption.sql.
 import { fail, audit, idempotent, hasRole, text, int, uuid, parseJson, today } from './core.js';
-import { loadStock, clampStatements, lotState, locKey } from './stock.js';
+import { loadStock, clampStatements, lotState, locKey, stockMoveStatements } from './stock.js';
 import { normCode } from './preparation.js';
 
 const KINDS = ['shelf', 'floor', 'cold', 'bulk'];
@@ -96,6 +96,7 @@ export default {
              SELECT ?, id, 'in', ?, ? FROM stock_lots WHERE product_id = ? AND location_id = ? AND coalesce(lot_code, '') = ? AND coalesce(expires_on, '9999-12-31') = ?`,
           ).bind(ctx.company.id, qty, ctx.user.id, pr.id, loc.id, lot ?? '', exp ?? '9999-12-31'));
         }
+        stmts.push(...stockMoveStatements(ctx, { product: pr.id, delta: qty, kind: 'in', location: loc.id, ref: text(a.p_ref, 80), reason: text(a.p_note, 200) }));
         const [r] = await ctx.db.batch(stmts);
         await audit(ctx, 'put_away', 'product', pr.id, { location: loc.code, qty, lot, expires_on: exp });
         return { ok: true, product: pr.name, location: loc.code, qty: r.results[0]?.qty ?? qty, lot, expires_on: exp, state: lotState(exp, today(ctx), alertDays(ctx)) };
@@ -168,7 +169,7 @@ export default {
               `INSERT INTO product_locations (company_id, product_id, location_id, qty, updated_at) VALUES (?, ?, ?, ?, ?)
                ON CONFLICT (product_id, location_id) DO UPDATE SET qty = excluded.qty, updated_at = excluded.updated_at`,
             ).bind(ctx.company.id, pid, loc.id, counted, ctx.now));
-            stmts.push(ctx.db.prepare('UPDATE products SET stock = max(coalesce(stock, 0) + ?, 0), updated_at = ? WHERE id = ? AND company_id = ?').bind(gap, ctx.now, pid, ctx.company.id));
+            stmts.push(...stockMoveStatements(ctx, { product: pid, delta: gap, kind: 'count', location: loc.id, reason: text(c.reason, 80) ?? `inventaire ${loc.code}` }));
             if (here && gap < 0) stmts.push(...clampStatements(ctx, here, counted, day));
             totalGap += Math.abs(gap);
           }
@@ -230,7 +231,7 @@ export default {
             .bind(ctx.company.id, s.id, -qty, reason, ctx.user.id),
           ctx.db.prepare('UPDATE product_locations SET qty = max(qty - ?, 0), updated_at = ? WHERE product_id = ? AND location_id = ? AND company_id = ?')
             .bind(qty, ctx.now, s.product_id, s.location_id, ctx.company.id),
-          ctx.db.prepare('UPDATE products SET stock = max(coalesce(stock, 0) - ?, 0), updated_at = ? WHERE id = ? AND company_id = ?').bind(qty, ctx.now, s.product_id, ctx.company.id),
+          ...stockMoveStatements(ctx, { product: s.product_id, delta: -qty, kind: 'discard', location: s.location_id, ref: s.lot_code, reason }),
         ]);
         if (!r.meta.changes) return { ok: false, error: 'qty_exceeds', available: 0 };
         await audit(ctx, 'lot_discard', 'product', s.product_id, { lot: s.lot_code, expires_on: s.expires_on, qty, reason });

@@ -5,7 +5,7 @@
 // OU au hub (préparateur) : les deux, selon le lieu de la commande.
 // Pas de verrou SELECT … FOR UPDATE : transitions par UPDATE conditionnel + assertions de lot (guard/runBatch).
 import { fail, audit, idempotent, hasRole, text, int, uuid, parseJson, guard, runBatch, today, plusMinutes } from './core.js';
-import { loadStock, pickLocation, lotHint, consumeStatements, locKey } from './stock.js';
+import { loadStock, pickLocation, lotHint, consumeStatements, locKey, stockMoveStatements } from './stock.js';
 import { notifyOrder, notifyPerson, sendLater, hhmm } from './messages.js';
 import { webhookStatement } from './webhooks.js';
 
@@ -100,6 +100,8 @@ async function pickScan(ctx, taskId, code, manual, lineId) {
       .bind(qty, done ? 1 : 0, l.order_item_id, ctx.company.id),
     ctx.db.prepare('UPDATE pick_tasks SET last_activity_at = ? WHERE id = ? AND company_id = ?').bind(ctx.now, t.id, ctx.company.id),
     ...consumeStatements(ctx, loc, 1, l.id, today(ctx)),
+    // le stock du produit baisse à chaque unité prélevée (avec ou sans emplacement d'entrepôt)
+    ...(l.product_id ? stockMoveStatements(ctx, { product: l.product_id, delta: -1, kind: 'pick', location: loc?.id ?? null, order: t.order_id }) : []),
   ], 'line_complete');
   if (manual) await audit(ctx, 'pick_manual_confirm', 'pick_line', l.id, { task: t.id });
   return {
@@ -233,6 +235,11 @@ export default {
           guard(ctx.db, "(SELECT status FROM pick_tasks WHERE id = ?) = 'picking'", [t.id]),
           ctx.db.prepare("UPDATE pick_lines SET qty_picked = ?, status = 'short', picked_at = ? WHERE id = ? AND company_id = ?").bind(found, ctx.now, l.id, ctx.company.id),
           ctx.db.prepare("UPDATE order_items SET picked_qty = ?, line_status = 'short' WHERE id = ? AND company_id = ?").bind(found, l.order_item_id, ctx.company.id),
+          // unités prises en plus, puis rupture constatée : le stock du produit passe à zéro (tracé dans l'historique)
+          ...(extra && l.product_id ? stockMoveStatements(ctx, { product: l.product_id, delta: -extra, kind: 'pick', location: loc?.id ?? null, order: t.order_id }) : []),
+          ctx.db.prepare(`INSERT INTO stock_moves (company_id, product_id, kind, qty, stock_after, order_id, reason, by_user, at)
+              SELECT ?, id, 'adjust', -stock, 0, ?, 'rupture constatée en préparation', ?, ? FROM products WHERE id = ? AND company_id = ? AND coalesce(stock, 0) > 0`)
+            .bind(ctx.company.id, t.order_id, ctx.user.id, ctx.now, l.product_id, ctx.company.id),
           ctx.db.prepare('UPDATE products SET stock = 0, updated_at = ? WHERE id = ? AND company_id = ? AND coalesce(stock, 0) > 0').bind(ctx.now, l.product_id, ctx.company.id),
           ctx.db.prepare('UPDATE pick_tasks SET last_activity_at = ? WHERE id = ? AND company_id = ?').bind(ctx.now, t.id, ctx.company.id),
           // le montant à encaisser baisse d'autant (même chiffre pour le chauffeur et la facture)

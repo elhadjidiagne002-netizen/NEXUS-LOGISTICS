@@ -5,6 +5,7 @@
 // lg_product_find (20261008000600), lg_requests_list / lg_request_done (20261007000600).
 // Nouveau dans la version Cloudflare : la commande naît ICI (saisie, import, API), plus sur le site NEXUS.
 import { fail, audit, idempotent, hasRole, text, num, int, uuid, phoneKey, parseJson } from './core.js';
+import { stockMoveStatements } from './stock.js';
 import { randomToken, sha256Hex } from '../crypto.js';
 import { chunks } from '../http.js';
 import { loadPricing, computeQuote, insuranceFee, zoneAt, SERVICES } from './tarifs.js';
@@ -281,7 +282,7 @@ const productOut = (p) => ({
   id: p.id, name: p.name, sku: p.sku, barcode: p.barcode, price_fcfa: p.price_fcfa, stock: p.stock, weight_g: p.weight_g,
   length_cm: p.length_cm, width_cm: p.width_cm, height_cm: p.height_cm, handling: parseJson(p.handling, []),
   is_shippable: Boolean(p.is_shippable), active: Boolean(p.active), vendor: p.vendor_name, vendor_id: p.vendor_id,
-  internal_code: 'NXI-' + orderShort(p.id),
+  internal_code: 'NXI-' + orderShort(p.id), min_stock: p.min_stock ?? null, cost_fcfa: p.cost_fcfa ?? null, supplier: p.supplier ?? null,
 });
 const handlingOf = (v) => (Array.isArray(v) ? JSON.stringify([...new Set(v.filter((h) => HANDLING.includes(h)))]) : null);
 const dim = (v) => { const n = num(v); if (n != null && (n <= 0 || n > 1000)) fail('invalid_amount'); return n; };
@@ -473,24 +474,33 @@ export default {
     },
   },
 
+  // Fiche produit. Le stock n'est saisi qu'à la CRÉATION (stock de départ, tracé « initial ») ; ensuite il ne bouge
+  // que par des mouvements (réception, préparation, correction motivée, inventaire…), cf. server/rpc/produits.js.
   lg_product_upsert: {
     roles: 'member',
     async handler(ctx, a) {
-      const staff = hasRole(ctx, ['support', 'dispatcher', 'dock_chief']);
+      const staff = hasRole(ctx, ['support', 'dispatcher', 'dock_chief', 'picker']);
       if (!staff && !vendorOnly(ctx)) fail('forbidden', 403);
       const p = a.p && typeof a.p === 'object' ? a.p : {};
       const name = text(p.name, 120);
       if (!name) fail('invalid_name');
       const price = int(p.price_fcfa) ?? 0; const w = p.weight_g == null || p.weight_g === '' ? null : int(p.weight_g);
-      const stock = p.stock == null || p.stock === '' ? null : int(p.stock);
-      if (price < 0 || (w != null && w <= 0)) fail('invalid_amount');
-      const vals = [name, text(p.sku, 64), text(p.barcode, 64), price, stock, w, dim(p.length_cm), dim(p.width_cm), dim(p.height_cm),
-        handlingOf(p.handling) ?? '[]', p.is_shippable === false ? 0 : 1, p.active === false ? 0 : 1];
+      const opt = (v) => (v == null || v === '' ? null : int(v));
+      const minStock = opt(p.min_stock); const cost = opt(p.cost_fcfa);
+      if (price < 0 || (w != null && w <= 0) || (minStock != null && minStock < 0) || (cost != null && cost < 0)) fail('invalid_amount');
+      const vals = [name, text(p.sku, 64), text(p.barcode, 64), price, w, dim(p.length_cm), dim(p.width_cm), dim(p.height_cm),
+        handlingOf(p.handling) ?? '[]', p.is_shippable === false ? 0 : 1, p.active === false ? 0 : 1, minStock, cost, text(p.supplier, 80)];
+      // même code-barres ou même référence qu'un autre produit de l'entreprise : refusé (le scan doit être sans ambiguïté)
+      const code = (v) => (v == null ? null : String(v).trim().toUpperCase());
+      const dup = await ctx.db.prepare(`SELECT name FROM products WHERE company_id = ? AND id != ? AND
+          ((? IS NOT NULL AND upper(barcode) = ?) OR (? IS NOT NULL AND upper(sku) = ?)) LIMIT 1`)
+        .bind(ctx.company.id, String(p.id ?? ''), code(vals[2]), code(vals[2]), code(vals[1]), code(vals[1])).first();
+      if (dup) return { ok: false, error: 'duplicate_code', product: dup.name };
       if (p.id) {
         const own = vendorOnly(ctx) ? ctx.user.id : null;
         const r = await ctx.db.prepare(
-          `UPDATE products SET name = ?, sku = ?, barcode = ?, price_fcfa = ?, stock = ?, weight_g = ?, length_cm = ?, width_cm = ?, height_cm = ?,
-             handling = ?, is_shippable = ?, active = ?, vendor_name = coalesce(?, vendor_name), updated_at = ?
+          `UPDATE products SET name = ?, sku = ?, barcode = ?, price_fcfa = ?, weight_g = ?, length_cm = ?, width_cm = ?, height_cm = ?,
+             handling = ?, is_shippable = ?, active = ?, min_stock = ?, cost_fcfa = ?, supplier = ?, vendor_name = coalesce(?, vendor_name), updated_at = ?
            WHERE id = ? AND company_id = ? AND (? IS NULL OR vendor_id = ?)`,
         ).bind(...vals, staff ? text(p.vendor_name, 80) : null, ctx.now, String(p.id), ctx.company.id, own, own).run();
         if (!r.meta.changes) fail('unknown_product', 404);
@@ -498,11 +508,16 @@ export default {
         return { ok: true, id: p.id };
       }
       const id = uuid();
-      await ctx.db.prepare(
-        `INSERT INTO products (name, sku, barcode, price_fcfa, stock, weight_g, length_cm, width_cm, height_cm, handling, is_shippable, active,
-           id, company_id, vendor_id, vendor_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      ).bind(...vals, id, ctx.company.id, vendorOnly(ctx) ? ctx.user.id : null, vendorOnly(ctx) ? ctx.user.name : text(p.vendor_name, 80)).run();
-      await audit(ctx, 'product_create', 'product', id, { name });
+      const initial = p.stock == null || p.stock === '' ? null : int(p.stock);
+      if (initial != null && initial < 0) fail('invalid_quantity');
+      await ctx.db.batch([
+        ctx.db.prepare(
+          `INSERT INTO products (name, sku, barcode, price_fcfa, weight_g, length_cm, width_cm, height_cm, handling, is_shippable, active, min_stock, cost_fcfa, supplier,
+             id, company_id, vendor_id, vendor_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ).bind(...vals, id, ctx.company.id, vendorOnly(ctx) ? ctx.user.id : null, vendorOnly(ctx) ? ctx.user.name : text(p.vendor_name, 80)),
+        ...(initial != null ? stockMoveStatements(ctx, { product: id, delta: initial, kind: 'initial', reason: 'stock de départ' }) : []),
+      ]);
+      await audit(ctx, 'product_create', 'product', id, { name, stock: initial });
       return { ok: true, id };
     },
   },

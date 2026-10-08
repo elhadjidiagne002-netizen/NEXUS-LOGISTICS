@@ -2,6 +2,27 @@
 
 Le plus récent en premier.
 
+## 08/10/2026 — Produits et stock : un vrai module, et un stock enfin juste
+- **Remarque de l'utilisateur** : « je ne vois pas où et comment faire entrer les produits, et pas de gestion de stock
+  poussée ». Constat : le catalogue était caché dans Service client → « Produits » (présenté comme facultatif) ; le
+  stock n'existait que par emplacement d'entrepôt ; et **le stock total d'un produit était faux** : jamais diminué
+  à la préparation, jamais augmenté au rangement (seuls l'inventaire, le rebut, la rupture et les retours le
+  touchaient).
+- **Fait** : tuile « Produits et stock » sur l'accueil (`/stock`) : stock, réservé (commandes pas encore
+  préparées), disponible, seuil d'alerte, emplacements, valeur ; fiche produit complète (prix d'achat, fournisseur,
+  seuil, stock de départ) ; entrée de marchandise (douchette, emplacement, lot, date, bon de livraison) ; correction
+  motivée (chef de quai, administrateur, vendeur pour ses produits) ; déplacement entre emplacements (les lots
+  suivent) ; historique des mouvements ; « À commander » (envoi par WhatsApp, export) ; import d'un catalogue depuis
+  Excel (gabarit, mise à jour par référence, erreurs par ligne) ; export Excel. Carte « Premiers pas » sur l'accueil
+  du propriétaire (produits, zones et tarifs, chauffeurs, première commande).
+- **Stock juste** : un seul chiffre (`products.stock`) tenu par une seule fonction dans TOUS les flux, avec une
+  ligne d'historique à chaque fois (migration `0013_stock.sql` : `stock_moves`, `min_stock`, `cost_fcfa`, `supplier`).
+  Code-barres ou référence en double refusés (le scan doit être sans ambiguïté).
+- **Vérifié** : 4 tests serveur (préparation qui fait baisser le stock, réservé/disponible, réception, rejeu sans
+  double comptage, correction, transfert et lots, seuil, import, isolation, vendeur) + 1 test unitaire (lecture du
+  fichier) ; 100 tests au total ; parcours complet dans l'aperçu local (création, entrée, correction, historique,
+  à commander), affichage téléphone sans débordement.
+
 ## 08/10/2026 — Tableau de bord d'administration de la plateforme (/admin/)
 - **Demande** : gérer l'intégralité du site avec les mêmes identifiants administrateur que les autres sites NEXUS
   (compte elhadjidiagne002@gmail.com).

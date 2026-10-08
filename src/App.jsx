@@ -2,7 +2,7 @@ import React, { Suspense, lazy, useEffect, useState } from 'react';
 import { backend, onAuthChange, rpc, isOffline, DEVICE_ID, deviceLabel, RpcError } from './lib/backend.js';
 import { subscribeQueue, flush, clearRejected } from './lib/offline.js';
 import { errText } from './lib/errors.js';
-import { NavProvider, ToastProvider, useNav, Btn, Card, Field, Loading, Link, Modal, ago } from './components/ui.jsx';
+import { NavProvider, ToastProvider, useNav, useRpc, Btn, Card, Field, Loading, Link, Modal, ago } from './components/ui.jsx';
 import { Icon } from './components/icons.jsx';
 
 const Picking = lazy(() => import('./screens/Picking.jsx'));
@@ -17,6 +17,7 @@ const Admin = lazy(() => import('./screens/Admin.jsx'));
 const Analytics = lazy(() => import('./screens/Analytics.jsx'));
 const Messages = lazy(() => import('./screens/Messages.jsx'));
 const Warehouse = lazy(() => import('./screens/Warehouse.jsx'));
+const Stock = lazy(() => import('./screens/Stock.jsx'));
 const Track = lazy(() => import('./screens/Track.jsx'));
 const Platform = lazy(() => import('./screens/Platform.jsx'));
 
@@ -28,6 +29,8 @@ export const ROLE_FR = { picker: 'préparateur', dock_chief: 'chef de quai', dis
 // Écrans par rôle (chapitre 03, acteurs et surfaces). « c » = couleur de l'icône.
 const TILES = [
   { to: '/chauffeur', icon: 'bike', c: '#059669', title: 'Ma journée', short: 'Journée', sub: 'Arrêts, livraison, encaissement', group: 'Terrain', show: (m) => !!m.courier_id },
+  { to: '/stock', icon: 'inbox', c: '#16a34a', title: 'Produits et stock', short: 'Stock', sub: 'Catalogue, entrées, stock, à commander', group: 'Produits',
+    show: (m) => has(m, 'picker', 'dock_chief', 'support', 'dispatcher', 'accountant') || m.is_vendor },
   { to: '/preparation', icon: 'box', c: '#0284c7', title: 'Préparation', short: 'Préparer', sub: 'Prélever, scanner, emballer, mettre à quai', group: 'Terrain', show: (m) => has(m, 'picker', 'dock_chief') || m.is_vendor },
   { to: '/entrepot', icon: 'layers', c: '#0891b2', title: 'Entrepôt', short: 'Entrepôt', sub: 'Emplacements, rangement, inventaire', group: 'Terrain', show: (m) => has(m, 'picker', 'dock_chief') },
   { to: '/quai', icon: 'truck', c: '#7c3aed', title: 'Quai', short: 'Quai', sub: 'Voyages, chargement, collectes, retours', group: 'Terrain', show: (m) => has(m, 'dock_chief', 'dispatcher') },
@@ -227,7 +230,7 @@ function Shell({ me }) {
   const screens = {
     preparation: <Picking taskId={seg[1]} sub={seg[2]} />, entrepot: <Warehouse />, quai: <Dock sub={seg[1]} id={seg[2]} />, chauffeur: <Driver stopId={seg[2]} />,
     tour: <Control />, caisse: <Cash />, factures: <Billing invoiceId={seg[1]} />, sav: <Support />, colis: <Support code={seg[1]} />,
-    vendeur: <Vendor />, admin: <Admin />, analytique: <Analytics />, messages: <Messages />, plateforme: <Platform />,
+    vendeur: <Vendor />, stock: <Stock />, admin: <Admin />, analytique: <Analytics />, messages: <Messages />, plateforme: <Platform />,
   };
   const tiles = TILES.filter((t) => t.show(me));
   const content = seg[0] ? screens[seg[0]] ?? <Home me={me} tiles={tiles} /> : tiles.length === 1 ? screens[tiles[0].to.slice(1)] : <Home me={me} tiles={tiles} />;
@@ -267,6 +270,7 @@ function Home({ me, tiles }) {
       <h1 style={{ margin: '4px 0 6px', fontSize: '1.9rem' }}>{hour < 13 ? 'Bonjour' : hour < 18 ? 'Bon après-midi' : 'Bonsoir'} {me.name?.split(' ')[0]}</h1>
       <p className="muted" style={{ margin: 0, maxWidth: 560 }}>{tiles.length ? 'Que voulez-vous faire ?' : 'Aucun rôle logistique sur ce compte pour l\'instant.'}</p>
     </div>
+    {me.is_admin && <FirstSteps />}
     {tiles.length === 0 ? <Card style={{ marginTop: 16 }}><h2>Aucun rôle logistique</h2>
       <p className="muted">Ce compte n'a pas encore de rôle (préparateur, chef de quai, répartiteur, caissier…). Demandez à l'administrateur.</p></Card>
       : <div className="grid tiles" style={{ marginTop: 18 }}>{tiles.map((t) =>
@@ -276,6 +280,26 @@ function Home({ me, tiles }) {
           <span className="go">Ouvrir <Icon name="arrowRight" size={16} /></span></Link>)}</div>}
     <SuiteNexus where="accueil" />
   </>;
+}
+
+// Premiers pas d'une nouvelle entreprise : ce qu'il reste à mettre en place (disparaît quand tout est fait).
+function FirstSteps() {
+  const { data } = useRpc('lg_setup_status', {});
+  const [hidden, setHidden] = useState(() => { try { return localStorage.getItem('lg-first-steps') === 'off'; } catch { return false; } });
+  if (!data || hidden) return null;
+  const steps = [
+    [data.products > 0, 'Ajouter vos produits', 'un par un ou depuis un fichier Excel, avec leur stock', '/stock'],
+    [data.zones > 0 && data.rate_cards > 0, 'Définir vos zones et vos tarifs de livraison', 'Administration → Tarifs et zones', '/admin'],
+    [data.couriers > 0, 'Inviter vos chauffeurs-livreurs', 'Administration → Rôles → Inviter par lien (WhatsApp)', '/admin'],
+    [data.orders > 0, 'Saisir ou importer une première commande', 'Service client → Commandes', '/sav'],
+  ];
+  const left = steps.filter(([ok]) => !ok).length;
+  if (!left) return null;
+  return <Card style={{ marginTop: 16 }}><div className="row between"><h3 style={{ margin: 0 }}>Premiers pas · {steps.length - left}/{steps.length}</h3>
+    <button className="icon-btn" aria-label="Masquer" title="Masquer" onClick={() => { setHidden(true); try { localStorage.setItem('lg-first-steps', 'off'); } catch { /* stockage indisponible */ } }}><Icon name="x" size={16} /></button></div>
+    <div className="list" style={{ marginTop: 8 }}>{steps.map(([ok, title, sub, to]) => <Link key={title} to={to} className="line" style={{ textDecoration: 'none', color: 'inherit', opacity: ok ? 0.55 : 1 }}>
+      <span className="chip-ico" style={{ '--c': ok ? '#16a34a' : '#94a3b8', width: 30, height: 30 }}><Icon name={ok ? 'check' : 'arrowRight'} size={16} /></span>
+      <span className="grow"><b style={{ textDecoration: ok ? 'line-through' : 'none' }}>{title}</b><div className="small muted">{sub}</div></span></Link>)}</div></Card>;
 }
 
 // Pont vers les autres outils gratuits de la suite (même convention ?src=<site>-<endroit> que

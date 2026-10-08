@@ -2,7 +2,7 @@
 // incidents, fiche colis (chaîne de garde : « chez qui était-il ? » en une requête).
 import React, { useState } from 'react';
 import { rpc } from '../lib/backend.js';
-import { Orders, Catalogue } from '../components/orders.jsx';
+import { Orders } from '../components/orders.jsx';
 import { Icon, useRpc, useAction, useNav, Btn, Card, Badge, Empty, Loading, ErrorBox, PageHead, Modal, Field, Tabs, Chips, StatusBadge,
   formatF, hhmm, dmy, ago } from '../components/ui.jsx';
 
@@ -19,8 +19,8 @@ export default function Support({ code }) {
   return <>
     <PageHead title="Service client" back="/" />
     <Tabs value={tab} onChange={setTab} tabs={[...(api ? [['orders', 'Commandes']] : []), ['confirm', 'À confirmer'], ['requests', 'Demandes'],
-      ...(api ? [['catalogue', 'Produits']] : []), ['incidents', 'Incidents'], ['package', 'Fiche colis']]} />
-    {tab === 'orders' && <Orders />}{tab === 'catalogue' && <Catalogue />}
+      ['incidents', 'Incidents'], ['package', 'Fiche colis']]} />
+    {tab === 'orders' && <Orders />}
     {tab === 'confirm' && <Confirm />}{tab === 'requests' && <Requests />}{tab === 'incidents' && <Incidents />}{tab === 'package' && <PackageCard initial={code} />}
   </>;
 }

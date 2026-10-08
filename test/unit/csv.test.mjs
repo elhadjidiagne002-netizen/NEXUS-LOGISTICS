@@ -21,3 +21,12 @@ test('séparateur virgule', () => {
   const o = parseOrdersCsv('reference,client,telephone,zone,article,quantite,prix_unitaire\nA,Awa,770000000,Yoff,Pain,1,200\n');
   assert.deepEqual([o[0].external_ref, o[0].zone, o[0].items[0].unit_price_fcfa], ['A', 'Yoff', 200]);
 });
+
+import { parseProductsCsv, PRODUCTS_TEMPLATE } from '../../src/lib/csv.js';
+
+test('catalogue : gabarit relu, colonnes dans le désordre, séparateur virgule, accents et BOM d\'Excel', () => {
+  const g = parseProductsCsv(PRODUCTS_TEMPLATE);
+  assert.deepEqual(g.map((p) => [p.name, p.sku, p.stock, p.min_stock]), [['Riz parfumé 5 kg', 'RIZ-5', '40', '10'], ['Huile 1 L', 'HUI-1', '24', '6']]);
+  const x = parseProductsCsv('﻿Stock,Désignation,Prix,Code-barres\r\n12,"Savon, lot de 3",900,611\r\n\r\n');
+  assert.deepEqual(x, [{ name: 'Savon, lot de 3', sku: null, barcode: '611', price_fcfa: '900', weight_kg: '', stock: '12', min_stock: '', cost_fcfa: '', supplier: null }]);
+});

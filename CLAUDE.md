@@ -36,6 +36,13 @@ Plan et état : **`ROADMAP.md`**. Historique : `JOURNAL.md`.
   `admin_audit`. Nouvelle fonction d'administration → `server/rpc/plateforme.js` (rôle `platform`, sans filtre
   d'entreprise, voulu). En local : `.dev.vars` (ignoré par git) avec `DEV_ADMIN_EMAIL` / `DEV_ADMIN_PASSWORD`
   → `scripts/api-dev.mjs` simule la base Devizo.
+- **Stock** : LE chiffre de stock d'un produit est `products.stock` (NULL = non suivi). Il ne change QUE par
+  `stockMoveStatements()` (`server/rpc/stock.js`), dans le même lot que l'écriture qui le cause : préparation
+  (chaque unité scannée), rupture, rangement / réception, correction motivée, inventaire, rebut, retours. Chaque
+  appel écrit une ligne `stock_moves` (historique). Ne jamais faire `UPDATE products SET stock` à la main.
+  Les quantités par emplacement (`product_locations`) restent le détail physique d'entrepôt. Modifier une fiche
+  produit ne touche jamais au stock (stock de départ à la création seulement). Écran : `/stock`
+  (`src/screens/Stock.jsx`, `server/rpc/produits.js`).
 - **Historique** : la version Postgres d'origine (`supabase/`, `test/sql/`, mode démo PGlite) a été supprimée
   après portage complet ; pour relire sa logique : `git show 708861b:supabase/migrations/<fichier>`.
 
