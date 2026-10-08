@@ -12,7 +12,7 @@ begin
       'sent_7d', (select count(*) from public.notification_outbox n where n.event_key = t.event_key and n.created_at > now() - interval '7 days'),
       -- dernières variables réellement envoyées : servent d'exemple pour l'aperçu
       'sample', coalesce((select n.vars - 'texte' from public.notification_outbox n where n.event_key = t.event_key order by n.created_at desc limit 1),
-                         '{"prenom":"Awa","commande":"A7F3C2D1","vendeur":"Boutique Ndèye","montant":12500,"lien":"https://logistics.nexusmarket.sn/suivi/…","livreur":"Moussa","heure":"14h30","code":"4812","minutes":10,"motif":"client absent","produit":"Huile 1 L","facture":"FAC-2026-000001","colis":2}'::jsonb)
+                         '{"prenom":"Awa","commande":"A7F3C2D1","vendeur":"Boutique Ndèye","montant":12500,"lien":"https://logistique.nexusmarket.sn/suivi/…","livreur":"Moussa","heure":"14h30","code":"4812","minutes":10,"motif":"client absent","produit":"Huile 1 L","facture":"FAC-2026-000001","colis":2}'::jsonb)
     ) order by t.position), '[]') from public.lg_message_templates t);
 end; $$;
 

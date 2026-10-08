@@ -55,7 +55,7 @@ language sql stable security definer set search_path = public as $$
       'pay_per_package',    500,
       'pay_fixed_trip',     0,
       'bonus_zero_failure', 1000,
-      'tracking_base_url',  'https://logistics.nexusmarket.sn/suivi/',
+      'tracking_base_url',  'https://logistique.nexusmarket.sn/suivi/',
       'double_check_fcfa',  100000, -- valeur de commande au-delà de laquelle un second contrôle est exigé
       'bonus_on_time',      0,      -- prime par livraison à l'heure (0 = désactivée)
       'peak_days',          '[]'::jsonb

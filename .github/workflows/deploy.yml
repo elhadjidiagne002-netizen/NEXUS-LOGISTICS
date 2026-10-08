@@ -59,11 +59,11 @@ jobs:
       - name: Vérification de la production
         run: |
           sleep 15
-          page=$(curl -sf https://nexus-logistics-6my.pages.dev/)
+          page=$(curl -sf https://logistique.nexusmarket.sn/)
           echo "$page" | grep -q '<title>NEXUS Logistics</title>'
           # le script de la page publiée doit être celui de ce build (cache immuable sur /assets/*)
           entry=$(grep -o 'src="/assets/index-[^"]*\.js"' dist/index.html | head -1)
           echo "$page" | grep -q "$entry"
-          curl -sf https://nexus-logistics-6my.pages.dev/suivi/00000000-0000-4000-a000-000000000000 | grep -q '<div id="root">'
-          curl -sf https://nexus-logistics-6my.pages.dev/sw.js | grep -q "nexus-logistics-v"
+          curl -sf https://logistique.nexusmarket.sn/suivi/00000000-0000-4000-a000-000000000000 | grep -q '<div id="root">'
+          curl -sf https://logistique.nexusmarket.sn/sw.js | grep -q "nexus-logistics-v"
           echo "Production OK ($entry)"

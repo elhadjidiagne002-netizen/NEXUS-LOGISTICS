@@ -2,6 +2,17 @@
 
 Le plus récent en premier.
 
+## 08/10/2026 — Domaine logistique.nexusmarket.sn en service
+- Domaine rattaché au projet Pages `nexus-logistics` (API Pages, jeton wrangler) puis enregistrement DNS
+  `CNAME logistique → nexus-logistics-6my.pages.dev` (proxifié) créé avec un jeton « Modifier le DNS de la
+  zone » limité à nexusmarket.sn fourni par l'utilisateur (fichier supprimé après usage). 26 → 27
+  enregistrements : rien d'autre touché. Domaine « actif », certificat HTTPS valide, `/`, `/suivi/…` et
+  `/sw.js` en 200.
+- **Lien de suivi des clients** : la valeur par défaut de `tracking_base_url` pointait sur
+  `logistics.nexusmarket.sn` (jamais créé) → `https://logistique.nexusmarket.sn/suivi/` (migration du socle
+  et exemple des modèles de messages ; rien n'était appliqué en base, donc corrigé à la source).
+- `deploy.yml` : la vérification de fin de déploiement contrôle le nouveau domaine.
+
 ## 08/10/2026 — Reprise en local du travail de nuit + mise au niveau de la suite NEXUS
 - **Rapatrié** : la branche cloud `claude/gallant-johnson-4atibs` (cycles 6 à 22) fusionnée dans `main`
   (avance simple, PR #1) ; côté NEXUS Market, la PR #4 (canal de secours e-mail `lg-fallback.js`) aussi.
@@ -11,8 +22,7 @@ Le plus récent en premier.
   l'écran de connexion et l'accueil, suivis par `?src=logistics-connexion` / `?src=logistics-accueil`.
 - **Déploiement** : le workflow `deploy.yml` échoue faute du secret `CLOUDFLARE_API_TOKEN` dans ce dépôt ;
   démo republiée à la main (`wrangler pages deploy dist`).
-- **Reste à décider par l'utilisateur** : sous-domaine `logistique.nexusmarket.sn` (comme devis./myshop./cv.),
-  secret GitHub du déploiement, remontée d'erreurs Sentry (projet à créer), et toujours la branche de test
+- **Reste à décider par l'utilisateur** : secret GitHub du déploiement, remontée d'erreurs Sentry (projet à créer), et toujours la branche de test
   Supabase + décisions 1-3 du chapitre 14 avant toute application en prod.
 
 ## 08/10/2026 — Cycle 22 : appel de livreurs en renfort (module 04, P2 « Gestion des pics »)
@@ -394,7 +404,8 @@ Dépôt git initialisé, aucun commit.
   (`vars.texte`, modèles modifiables) ; envoi codé côté NEXUS (WhatsApp, e-mail Brevo en secours,
   `lg-fallback.js`) — actif dès que les migrations seront appliquées.
 - Planificateur : `lg_watchdog`, `lg_vendor_reminders`, `lg_purge`, `lg_evening_report` prêts, non planifiés.
-- Hébergement : non déployé.
+- Hébergement : Cloudflare Pages `nexus-logistics`, **https://logistique.nexusmarket.sn** (démo tant que
+  `VITE_SUPABASE_*` ne sont pas posées ; déploiement automatique bloqué faute de `CLOUDFLARE_API_TOKEN`).
 
 ## Chantiers en attente
 - Connexion chauffeur par téléphone + code à 4 chiffres (exige une fonction serveur qui
