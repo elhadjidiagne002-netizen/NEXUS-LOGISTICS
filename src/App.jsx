@@ -1,5 +1,5 @@
 import React, { Suspense, lazy, useEffect, useState } from 'react';
-import { backend, MODE, DEMO_USERS, onAuthChange, rpc, setSimulatedOffline, isOffline } from './lib/backend.js';
+import { backend, MODE, DEMO_USERS, onAuthChange, rpc, setSimulatedOffline, isOffline, DEVICE_ID, deviceLabel, RpcError } from './lib/backend.js';
 import { subscribeQueue, flush, clearRejected } from './lib/offline.js';
 import { errText } from './lib/errors.js';
 import { NavProvider, ToastProvider, useNav, Btn, Card, Field, Loading, Link, Modal, ago } from './components/ui.jsx';
@@ -74,10 +74,24 @@ function Authed() {
       const b = await backend();
       const s = await b.session();
       if (!s) { setMe(null); setPhase('login'); return; }
+      if (!(await devicePing(b))) return;
       setMe(await rpc('lg_me', {})); setPhase('ready');
     } catch (e) { setBootErr(e); setPhase('login'); }
   };
+  // appareil bloqué (perdu, volé) ou session coupée à distance : déconnexion immédiate
+  const devicePing = async (b) => {
+    if (!DEVICE_ID) return true;
+    const r = await rpc('lg_device_ping', { p_device: DEVICE_ID, p_label: deviceLabel() }).catch(() => ({ ok: true }));
+    if (r.ok !== false) return true;
+    setBootErr(new RpcError(r.error)); await b.signOut(); setMe(null); setPhase('login');
+    return false;
+  };
   useEffect(() => { load(); return onAuthChange(load); }, []);
+  useEffect(() => {
+    if (phase !== 'ready') return;
+    const i = setInterval(async () => { if (!isOffline() && document.visibilityState === 'visible') devicePing(await backend()); }, 5 * 60000);
+    return () => clearInterval(i);
+  }, [phase]);
   if (phase === 'boot') return <Boot />;
   if (phase === 'login' || !me) return <Login error={bootErr} />;
   return <MeCtx.Provider value={me}><Shell me={me} /></MeCtx.Provider>;
@@ -114,6 +128,7 @@ const ROLE_ICON = { Administrateur: 'shield', Préparatrice: 'box', 'Chef de qua
   'Service client': 'headset', Vendeur: 'store' };
 function Login({ error }) {
   const [email, setEmail] = useState(''); const [pw, setPw] = useState(''); const [err, setErr] = useState(error);
+  useEffect(() => { if (error) setErr(error); }, [error]);
   const signIn = async (e) => {
     e?.preventDefault();
     try { await (await backend()).signIn(email, pw); } catch (x) { setErr(x); }
@@ -136,6 +151,7 @@ function Login({ error }) {
       {MODE === 'demo' ? <>
         <h1>Démonstration</h1>
         <p className="muted" style={{ marginTop: 0 }}>Une base complète tourne sur cet appareil, avec une journée fictive déjà commencée. Choisissez qui vous êtes :</p>
+        {err && <div className="flash bad" style={{ marginBottom: 12 }}>{errText(err)}</div>}
         <div className="grid cols-2" style={{ gap: 10 }}>{DEMO_USERS.map((u) =>
           <button key={u.id} className="role-card" onClick={async () => (await backend()).signIn(u.id)}>
             <span className="chip-ico" style={{ width: 40, height: 40 }}><Icon name={ROLE_ICON[u.label] ?? (u.label.startsWith('Chauffeur') ? 'bike' : 'user')} /></span>

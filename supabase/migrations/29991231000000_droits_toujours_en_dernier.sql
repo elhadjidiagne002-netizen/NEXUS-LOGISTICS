@@ -62,6 +62,7 @@ declare
     'lg_dock_upsert', 'lg_dock_checkin', 'lg_dock_assign', 'lg_dock_board', 'lg_trip_dock',
     'lg_kpis_by_axis', 'lg_costs',
     'lg_order_insure', 'lg_track_incidents', 'lg_track_incident_answer',
+    'lg_device_ping', 'lg_devices_list', 'lg_device_revoke', 'lg_device_block',
     -- chauffeur
     'lg_trip_start', 'lg_my_day', 'lg_stop_call', 'lg_stop_arrive', 'lg_deliver', 'lg_fail', 'lg_trip_finish',
     'lg_driver_ping', 'lg_sos', 'lg_add_expense', 'lg_vehicle_check',

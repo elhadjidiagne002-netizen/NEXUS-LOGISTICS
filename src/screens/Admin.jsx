@@ -7,11 +7,11 @@ import { Icon, useRpc, useAction, Btn, Card, Badge, Empty, Loading, ErrorBox, Pa
 export default function Admin() {
   const me = useMe();
   const [tab, setTab] = useState(me.is_admin ? 'staff' : 'fleet');
-  const tabs = me.is_admin ? [['staff', 'Rôles'], ['fleet', 'Flotte'], ['pricing', 'Tarifs et zones'], ['config', 'Réglages']] : [['fleet', 'Flotte']];
+  const tabs = me.is_admin ? [['staff', 'Rôles'], ['fleet', 'Flotte'], ['pricing', 'Tarifs et zones'], ['devices', 'Appareils'], ['config', 'Réglages']] : [['fleet', 'Flotte']];
   return <>
     <PageHead title="Administration" back="/" />
     <Tabs tabs={tabs} value={tab} onChange={setTab} />
-    {tab === 'staff' && <Staff />}{tab === 'fleet' && <Fleet />}{tab === 'pricing' && <Pricing />}{tab === 'config' && <Config />}
+    {tab === 'staff' && <Staff />}{tab === 'fleet' && <Fleet />}{tab === 'pricing' && <Pricing />}{tab === 'config' && <Config />}{tab === 'devices' && <Devices />}
   </>;
 }
 
@@ -227,5 +227,31 @@ function PeakDays({ value, onChange }) {
       <input className="input" style={{ width: 160 }} placeholder="Tabaski" value={label} onChange={(e) => setLabel(e.target.value)} />
       <input className="input" style={{ width: 90 }} inputMode="decimal" value={factor} onChange={(e) => setFactor(e.target.value)} aria-label="Coefficient" />
       <Btn disabled={!d || !label} onClick={() => { onChange([...value, { date: d, label, factor: Number(factor.replace(',', '.')) || 1 }]); setD(''); setLabel(''); }}><Icon name="plus" size={16} />Ajouter</Btn></div>
+  </div>;
+}
+
+// Appareils (P2) : téléphones utilisés par l'équipe ; déconnexion à distance, blocage d'un appareil perdu
+function Devices() {
+  const { data, error, loading, reload } = useRpc('lg_devices_list', {});
+  const [q, setQ] = useState('');
+  const [run, busy] = useAction();
+  if (loading && !data) return <Loading />;
+  const rows = (data ?? []).filter((d) => !q || `${d.user} ${d.label ?? ''}`.toLowerCase().includes(q.toLowerCase()));
+  const act2 = (fn, args, ok) => run(async () => { const r = await rpc(fn, args); reload(); return r; }, { ok });
+  return <div className="stack"><ErrorBox error={error} />
+    <div className="row between"><input className="input" style={{ maxWidth: 320 }} placeholder="Personne ou appareil…" value={q} onChange={(e) => setQ(e.target.value)} />
+      <span className="small muted">{(data ?? []).filter((d) => d.blocked).length} bloqué(s) · {(data ?? []).length} appareil(s)</span></div>
+    <Card>{!rows.length ? <Empty icon="phone">Aucun appareil. Ils apparaissent à la première ouverture de l'app.</Empty> :
+      <div className="scroll-x"><table className="tbl"><thead><tr><th>Personne</th><th>Appareil</th><th>Vu</th><th>État</th><th></th></tr></thead>
+        <tbody>{rows.map((d) => <tr key={d.id}><td><b>{d.user}</b></td>
+          <td>{d.label ?? '—'}{d.this_device && <Badge kind="info">celui-ci</Badge>}<div className="small muted" title={d.user_agent ?? ''}>depuis le {dmy(d.first_seen_at)}</div></td>
+          <td className="small">{dmy(d.last_seen_at)} {new Date(d.last_seen_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Dakar' })}</td>
+          <td>{d.blocked ? <Badge kind="bad">bloqué</Badge> : d.active_session ? <Badge kind="ok">connecté</Badge> : <Badge>déconnecté</Badge>}</td>
+          <td><div className="row" style={{ justifyContent: 'flex-end' }}>
+            {!d.blocked && d.active_session && <Btn size="sm" disabled={busy} onClick={() => act2('lg_device_revoke', { p_id: d.id }, 'Session coupée : reconnexion obligatoire')}>Déconnecter</Btn>}
+            {d.blocked ? <Btn size="sm" disabled={busy} onClick={() => act2('lg_device_block', { p_id: d.id, p_blocked: false }, 'Appareil débloqué')}>Débloquer</Btn>
+              : !d.this_device && <Btn size="sm" kind="bad" disabled={busy} onClick={() => confirm(`Bloquer « ${d.label ?? 'cet appareil'} » de ${d.user} ? Plus rien ne passera depuis ce téléphone.`)
+                && act2('lg_device_block', { p_id: d.id, p_blocked: true }, 'Appareil bloqué')}>Bloquer</Btn>}</div></td></tr>)}</tbody></table></div>}</Card>
+    <p className="small muted">Téléphone perdu ou volé : <b>Bloquer</b> — plus aucune action n'est acceptée depuis lui, même connecté. <b>Déconnecter</b> coupe la session en cours ; la personne se reconnecte avec son mot de passe.</p>
   </div>;
 }

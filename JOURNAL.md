@@ -2,6 +2,24 @@
 
 Le plus récent en premier.
 
+## 08/10/2026 — Cycle 15 : appareils (module 15, P2)
+- L'app crée un **identifiant d'appareil** (une fois, `localStorage`) et l'envoie en en-tête
+  `x-lg-device` (option `global.headers` de supabase-js) ; PostgREST le rend lisible en SQL
+  (`request.headers`), comme l'identifiant de session du jeton (`request.jwt.claims.session_id`).
+- `lg_device_ping` à l'ouverture puis toutes les 5 min (`lg_devices` : personne, appareil, vu le…).
+- **Blocage appliqué côté serveur** : `lg_has_role`, `lg_is_admin`, `lg_my_courier_id`,
+  `lg_trip_courier_user` échouent pour un appareil **bloqué** (perdu/volé) ou pour une session
+  **coupée à distance** ; une reconnexion par mot de passe crée une nouvelle session, qui passe.
+  L'app se déconnecte et affiche la raison. Sans en-tête (ancienne version) : inchangé.
+- Limite connue : les fonctions qui reconnaissent un **vendeur** par `vendor_id = auth.uid()` (sans
+  passer par ces contrôles) ne sont pas concernées par le blocage.
+- Écran : Administration → **Appareils** (rechercher, déconnecter, bloquer, débloquer ; impossible
+  de bloquer l'appareil qu'on utilise). Démo : une « session » par connexion, pour essayer.
+- Messages en français pour tous les nouveaux codes d'erreur des cycles 6 à 15.
+- Vérifié de bout en bout dans la démo : Moussa ouvre l'app, l'admin bloque son appareil, Moussa
+  est refusé avec le message « Cet appareil a été bloqué… ».
+- Tests : 86/86.
+
 ## 08/10/2026 — Cycle 14 : assurance colis et résolution des incidents (module 13, P2)
 - **Assurance** : `lg_quote` accepte une valeur déclarée (`p_declared_value_fcfa`) et renvoie la
   prime (`insurance_fee_fcfa`, 2 % · 300 F minimum · 1 000 000 F assurables au plus — réglables) et

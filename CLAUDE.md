@@ -69,12 +69,15 @@ base Supabase** (projet `pqcqbstbdujzaclsiosv`). Toute la logique métier est en
 14. **`Field` + `Chips`** : un `<label>` autour de boutons active le premier quand on touche
     l'intitulé ; `Field` rend un `<div>` si son enfant est un `Chips`. Ne pas envelopper un groupe de
     boutons dans un `<label>` à la main.
-15. **Bash Windows** : les heredocs Python avec apostrophes cassent sous Git Bash ; passer par
+15. **Appareils** : les contrôles d'identité (`lg_has_role`, `lg_is_admin`, `lg_my_courier_id`,
+    `lg_trip_courier_user`) intègrent `lg_device_blocked()`. Toute nouvelle fonction doit passer par
+    eux (pas de `auth.uid()` comparé à la main pour un rôle), sinon un appareil bloqué y aurait accès.
+16. **Bash Windows** : les heredocs Python avec apostrophes cassent sous Git Bash ; passer par
     un fichier de script.
 
 ## Tests
-- `npm test` : 83 tests (PGlite = Postgres 18 en WebAssembly, pgcrypto inclus), dont un
-  fichier par cycle (`test/sql/cycle1..14.test.mjs`) qui part de la journée de démo.
+- `npm test` : 86 tests (PGlite = Postgres 18 en WebAssembly, pgcrypto inclus), dont un
+  fichier par cycle (`test/sql/cycle1..15.test.mjs`) qui part de la journée de démo.
 - `test/helpers/db.mjs` : `createDb()` charge le miroir + migrations + données ;
   `rpc(uid, nom, args)` appelle comme `supabase.rpc` sous l'identité `uid`.
 - Le miroir `supabase/stub/prod_subset.sql` a été relevé **en lecture seule** sur la prod

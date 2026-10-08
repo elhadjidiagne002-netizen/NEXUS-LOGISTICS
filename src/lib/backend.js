@@ -14,6 +14,20 @@ export class RpcError extends Error {
 }
 export class NetworkError extends Error {}
 
+// Identifiant de l'appareil, créé une fois : sert au blocage d'un téléphone perdu (lg_devices)
+export const DEVICE_ID = (() => {
+  try {
+    let id = localStorage.getItem('lg-device');
+    if (!id) { id = crypto.randomUUID(); localStorage.setItem('lg-device', id); }
+    return id;
+  } catch { return null; }
+})();
+export const deviceLabel = () => {
+  const ua = navigator.userAgent;
+  const os = /iPhone|iPad/.test(ua) ? 'iPhone' : /Android/.test(ua) ? 'Android' : /Windows/.test(ua) ? 'Windows' : /Mac/.test(ua) ? 'Mac' : 'Appareil';
+  return `${os} · ${/Edg\//.test(ua) ? 'Edge' : /Chrome\//.test(ua) ? 'Chrome' : /Firefox\//.test(ua) ? 'Firefox' : /Safari\//.test(ua) ? 'Safari' : 'navigateur'}`;
+};
+
 let impl;
 const listeners = new Set();
 export const onAuthChange = (fn) => { listeners.add(fn); return () => listeners.delete(fn); };
@@ -27,7 +41,8 @@ export const isOffline = () => simulatedOffline || !navigator.onLine;
 /* ------------------------------------------------------------------ SUPABASE */
 async function supabaseImpl() {
   const { createClient } = await import('@supabase/supabase-js');
-  const sb = createClient(SB_URL, SB_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
+  const sb = createClient(SB_URL, SB_KEY, { auth: { persistSession: true, autoRefreshToken: true },
+    global: { headers: DEVICE_ID ? { 'x-lg-device': DEVICE_ID } : {} } });
   sb.auth.onAuthStateChange(() => emit());
   return {
     async rpc(name, args = {}) {
@@ -107,15 +122,17 @@ async function demoImpl() {
     await db.query("insert into public.app_config (key, value) values ('lg_demo_ready', jsonb_build_object('at', now(), 'v', $1::text))", [sql.VERSION]);
   }
   let uid = localStorage.getItem('lg-demo-uid');
+  // une « session » par connexion, comme le jeton Supabase (session_id) : la déconnexion à distance la vise
+  let sid = localStorage.getItem('lg-demo-session') ?? crypto.randomUUID();
   progress(null);
   const files = new Map(); // photos et signatures de démo : restent dans la mémoire de l'onglet
   return {
     async rpc(name, args = {}) {
       if (isOffline()) throw new NetworkError('offline');
-      return rpcOn(db, () => uid)(name, args);
+      return rpcOn(db, () => uid, () => sid)(name, args);
     },
     async session() { return uid ? { user: { id: uid } } : null; },
-    async signIn(id) { uid = id; localStorage.setItem('lg-demo-uid', id); emit(); },
+    async signIn(id) { uid = id; sid = crypto.randomUUID(); localStorage.setItem('lg-demo-uid', id); localStorage.setItem('lg-demo-session', sid); emit(); },
     async signOut() { uid = null; localStorage.removeItem('lg-demo-uid'); emit(); },
     async upload(path, blob) {
       if (isOffline()) throw new NetworkError('offline');
@@ -138,7 +155,7 @@ async function demoImpl() {
   };
 }
 
-function rpcOn(db, getUid = () => null) {
+function rpcOn(db, getUid = () => null, getSid = () => null) {
   return async (name, args = {}, asUid) => {
     const keys = Object.keys(args).filter((k) => args[k] !== undefined);
     const vals = keys.map((k) => {
@@ -149,7 +166,9 @@ function rpcOn(db, getUid = () => null) {
     });
     const sql = `select public.${name.replace(/[^a-z_]/g, '')}(${keys.map((k, i) => `${k} => $${i + 1}`).join(', ')}) as r`;
     try {
-      await db.query("select set_config('test.uid', $1, false)", [asUid ?? getUid() ?? '']);
+      await db.query("select set_config('test.uid', $1, false), set_config('request.headers', $2, false), set_config('request.jwt.claims', $3, false)",
+        [asUid ?? getUid() ?? '', !asUid && DEVICE_ID ? JSON.stringify({ 'x-lg-device': DEVICE_ID, 'user-agent': navigator.userAgent }) : '',
+         !asUid && getSid() ? JSON.stringify({ session_id: getSid() }) : '']);
       const { rows } = await db.query(sql, vals);
       return rows[0].r;
     } catch (e) {
