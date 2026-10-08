@@ -2,6 +2,14 @@
 
 Le plus récent en premier.
 
+## 08/10/2026 — Cycle 12 : tableaux par axe et export Excel (module 14, P2)
+- `lg_kpis_by_axis(axe, du, au)` : présentations, livrés, échecs, taux d'échec, 1re présentation,
+  ponctualité, délai de bout en bout, **par zone, vendeur, chauffeur, véhicule, jour de la semaine
+  ou heure**. Mêmes définitions que `lg_kpis` (le test vérifie que chaque axe redonne ses totaux).
+- Pilotage → Indicateurs → « Tableau par axe », bouton **Exporter (Excel)** : CSV point-virgule,
+  BOM UTF-8 (accents), décimales à virgule.
+- Tests : 76/76.
+
 ## 08/10/2026 — Cycle 11 : plusieurs quais (module 03, P2)
 - **Quais** (`lg_docks`, 3 en démo : Q1 fourgonnettes, Q2 motos, Q3 tricycles) ; création par le
   chef de quai.

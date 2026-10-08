@@ -46,9 +46,38 @@ function Kpis() {
         <Card><h3>Par chauffeur</h3><Bars rows={data.by_courier.map((c) => [c.courier, c.delivered, `${c.failed} échec · ★ ${c.rating}`])} /></Card>
         <Card><h3>Par vendeur</h3><Bars rows={data.by_vendor.map((v) => [v.vendor, v.tasks, `${v.prep_hours ?? '—'} h · ${v.stockout_lines} rupture(s)`])} /></Card>
       </div>
+      <AxisTable from={iso(from)} to={iso(to)} />
       <p className="small muted">Les seuils d'alerte se fixent après quatre semaines de mesure réelle, pas avant.</p>
     </>}
   </>;
+}
+
+// Tableau par axe (P2) + export pour Excel (CSV ; point-virgule, BOM UTF-8 pour les accents)
+const AXES = [['zone', 'Zone'], ['vendor', 'Vendeur'], ['courier', 'Chauffeur'], ['vehicle', 'Véhicule'], ['weekday', 'Jour'], ['hour', 'Heure']];
+const COLS = [['presentations', 'Présentations'], ['delivered', 'Livrés'], ['failed', 'Échecs'], ['failure_pct', 'Échec %'],
+  ['first_attempt_pct', '1re présentation %'], ['on_time_pct', 'Ponctualité %'], ['lead_hours', 'Délai (h)']];
+function AxisTable({ from, to }) {
+  const [axis, setAxis] = useState('zone');
+  const { data, error } = useRpc('lg_kpis_by_axis', { p_axis: axis, p_from: from, p_to: to });
+  const exportCsv = () => {
+    const head = [AXES.find(([k]) => k === axis)[1], ...COLS.map(([, l]) => l)];
+    const cell = (v) => (v == null ? '' : String(v).replace('.', ','));
+    const lines = [head, ...data.rows.map((r) => [r.label, ...COLS.map(([k]) => cell(r[k]))])]
+      .map((l) => l.map((c) => (/[;"\n]/.test(c) ? `"${c.replace(/"/g, '""')}"` : c)).join(';'));
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' }));
+    a.download = `nexus-logistics-${axis}-${from}_${to}.csv`; a.click();
+  };
+  return <Card style={{ marginTop: 12 }}>
+    <div className="row between"><h3 style={{ margin: 0 }}>Tableau par axe</h3>
+      <Btn size="sm" disabled={!data?.rows?.length} onClick={exportCsv}><Icon name="download" size={16} />Exporter (Excel)</Btn></div>
+    <div style={{ margin: '10px 0' }}><Chips options={AXES} value={axis} onChange={setAxis} /></div>
+    <ErrorBox error={error} />
+    {!data ? <Loading /> : !data.rows.length ? <Empty icon="chart">Aucune présentation sur la période.</Empty> :
+      <div className="scroll-x"><table className="tbl"><thead><tr><th>{AXES.find(([k]) => k === axis)[1]}</th>{COLS.map(([k, l]) => <th key={k} className="num">{l}</th>)}</tr></thead>
+        <tbody>{data.rows.map((r) => <tr key={r.key}><td>{r.label}</td>{COLS.map(([k]) => <td key={k} className="num"
+          style={k === 'failure_pct' && r[k] > 10 ? { color: 'var(--bad)' } : undefined}>{r[k] ?? '—'}</td>)}</tr>)}</tbody></table></div>}
+  </Card>;
 }
 
 function Bars({ rows }) {
