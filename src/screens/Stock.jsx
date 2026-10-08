@@ -1,5 +1,6 @@
 // Produits et stock : catalogue, stock (réservé, disponible, seuil d'alerte), entrée de marchandise, correction
-// motivée, transfert entre emplacements, historique des mouvements, liste « à commander », import / export Excel.
+// motivée, transfert entre emplacements, historique des mouvements, liste « à commander », import / export Excel,
+// fournisseurs et bons de commande (components/purchasing.jsx).
 // Le stock baisse tout seul à la préparation des commandes et remonte aux retours remis en vente.
 import React, { useMemo, useState } from 'react';
 import { rpc } from '../lib/backend.js';
@@ -7,6 +8,7 @@ import { act } from '../lib/offline.js';
 import { parseProductsCsv, downloadCsv, PRODUCTS_TEMPLATE } from '../lib/csv.js';
 import { useRpc, useAction, Icon, Btn, Card, Badge, Empty, Loading, ErrorBox, PageHead, Modal, Field, Tabs, Chips, Stat, HANDLING, formatF, dmy, ago } from '../components/ui.jsx';
 import { useMe, has } from '../App.jsx';
+import { PurchaseOrders, Suppliers } from '../components/purchasing.jsx';
 
 const STATE = { ok: ['en stock', 'ok'], low: ['sous le seuil', 'todo'], out: ['rupture', 'bad'], untracked: ['non suivi', ''] };
 const KIND = { in: 'Entrée', pick: 'Préparation', adjust: 'Correction', count: 'Inventaire', discard: 'Rebut', return: 'Retour', transfer: 'Transfert', initial: 'Stock de départ' };
@@ -19,6 +21,9 @@ export default function Stock() {
   const [tab, setTab] = useState('stock');
   const ov = useRpc('lg_stock_overview', { p_inactive: true }, { refresh: 60000 });
   const t = ov.data?.totals;
+  const staff = !isVendor(me);
+  const canBuy = me.is_admin || has(me, 'dock_chief', 'accountant');
+  const canReceive = me.is_admin || has(me, 'dock_chief', 'picker');
   return <>
     <PageHead title="Produits et stock" back="/" sub="Vos produits, ce qu'il reste, ce qui entre et ce qui sort. Le stock baisse tout seul à chaque préparation." />
     {t && <div className="stats">
@@ -27,11 +32,14 @@ export default function Stock() {
       <Stat icon="alert" c="#d97706" label="sous le seuil" value={t.low} kind={t.low ? 'todo' : ''} />
       <Stat icon="x" c="#dc2626" label="en rupture" value={t.out} kind={t.out ? 'bad' : ''} />
     </div>}
-    <Tabs value={tab} onChange={setTab} tabs={[['stock', 'Stock'], ['receive', 'Entrée de marchandise'], ['moves', 'Mouvements'], ['order', `À commander${t ? ` (${t.low + t.out})` : ''}`]]} />
+    <Tabs value={tab} onChange={setTab} tabs={[['stock', 'Stock'], ['receive', 'Entrée de marchandise'], ['moves', 'Mouvements'], ['order', `À commander${t ? ` (${t.low + t.out})` : ''}`],
+      ...(staff ? [['po', 'Bons de commande'], ['suppliers', 'Fournisseurs']] : [])]} />
     {tab === 'stock' && <StockList ov={ov} me={me} />}
     {tab === 'receive' && <Receive products={ov.data?.products ?? []} me={me} onDone={ov.reload} />}
     {tab === 'moves' && <Moves />}
-    {tab === 'order' && <ToOrder ov={ov} />}
+    {tab === 'order' && <ToOrder ov={ov} canBuy={canBuy} onCreated={() => setTab('po')} />}
+    {tab === 'po' && <PurchaseOrders canWrite={canBuy} canReceive={canReceive} products={ov.data?.products ?? []} />}
+    {tab === 'suppliers' && <Suppliers canWrite={canBuy} />}
   </>;
 }
 
@@ -65,7 +73,7 @@ function StockList({ ov, me }) {
         <th className="num">Disponible</th><th className="num">Seuil</th><th>Où</th><th>État</th><th></th></tr></thead><tbody>
         {list.map((p) => <tr key={p.id} style={{ opacity: p.active ? 1 : 0.5 }}>
           <td><b>{p.name}</b><div className="small muted">{[p.sku, p.barcode, formatF(p.price_fcfa), p.vendor].filter(Boolean).join(' · ')}</div></td>
-          <td className="num"><b>{n(p.stock)}</b></td><td className="num">{p.reserved ? n(p.reserved) : ''}</td><td className="num">{n(p.available)}</td>
+          <td className="num"><b>{n(p.stock)}</b></td><td className="num">{p.reserved ? n(p.reserved) : ''}</td><td className="num">{n(p.available)}{p.on_order > 0 && <div className="small muted">+{n(p.on_order)} en commande</div>}</td>
           <td className="num">{n(p.min_stock)}</td>
           <td className="small">{p.locations.length ? p.locations.map((l) => `${l.code} (${l.qty})`).join(', ') : <span className="muted">—</span>}</td>
           <td><Badge kind={STATE[p.state][1]}>{STATE[p.state][0]}</Badge></td>
@@ -88,6 +96,7 @@ function StockList({ ov, me }) {
 // ----------------------------------------------------------------- fiche produit
 export function ProductForm({ p, me, onClose, onDone }) {
   const [f, setF] = useState({ ...p, weight_kg: p.weight_g ? String(p.weight_g / 1000) : '', price_fcfa: p.price_fcfa ?? '', stock: '' });
+  const sups = useRpc('lg_suppliers_list', {}, { skip: isVendor(me) });
   const [run, busy] = useAction();
   const s = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const num = (v) => (v === '' || v == null ? null : Number(String(v).replace(/\s/g, '').replace(',', '.')));
@@ -101,7 +110,9 @@ export function ProductForm({ p, me, onClose, onDone }) {
       <Field label="Poids (kg)"><input className="input" inputMode="decimal" value={f.weight_kg} onChange={s('weight_kg')} /></Field>
       <Field label="Seuil d'alerte (« à commander » en dessous)"><input className="input" inputMode="numeric" value={f.min_stock ?? ''} onChange={s('min_stock')} placeholder="aucun" /></Field>
       {!p.id && <Field label="Stock de départ (laisser vide si non suivi)"><input className="input" inputMode="numeric" value={f.stock} onChange={s('stock')} /></Field>}
-      <Field label="Fournisseur (facultatif)"><input className="input" value={f.supplier ?? ''} onChange={s('supplier')} /></Field>
+      {isVendor(me) ? <Field label="Fournisseur (facultatif)"><input className="input" value={f.supplier ?? ''} onChange={s('supplier')} /></Field>
+        : <Field label="Fournisseur habituel"><select className="input" value={f.supplier_id ?? ''} onChange={(e) => setF({ ...f, supplier_id: e.target.value || null })}>
+          <option value="">Aucun</option>{(sups.data ?? []).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></Field>}
       {!isVendor(me) && <Field label="Vendeur (facultatif)"><input className="input" value={f.vendor ?? f.vendor_name ?? ''} onChange={(e) => setF({ ...f, vendor_name: e.target.value, vendor: e.target.value })} /></Field>}
     </div>
     <Field label="Manutention"><Chips multi options={HANDLING} value={f.handling ?? []} onChange={(v) => setF({ ...f, handling: v })} /></Field>
@@ -109,7 +120,7 @@ export function ProductForm({ p, me, onClose, onDone }) {
     {p.id && <p className="small muted" style={{ margin: 0 }}>Le stock ne se modifie pas ici : utilisez <b>＋ Entrée</b> ou <b>Corriger</b> (chaque changement est tracé).</p>}
     <Btn kind="primary" size="xl" disabled={busy || !f.name?.trim()} onClick={() => run(async () => {
       const r = await rpc('lg_product_upsert', { p: { id: p.id, name: f.name, price_fcfa: num(f.price_fcfa) ?? 0, cost_fcfa: num(f.cost_fcfa), sku: f.sku || null, barcode: f.barcode || null,
-        weight_g: f.weight_kg ? Math.round(num(f.weight_kg) * 1000) : null, min_stock: num(f.min_stock), supplier: f.supplier || null, vendor_name: f.vendor_name ?? null,
+        weight_g: f.weight_kg ? Math.round(num(f.weight_kg) * 1000) : null, min_stock: num(f.min_stock), supplier: f.supplier || null, supplier_id: f.supplier_id || null, vendor_name: f.vendor_name ?? null,
         handling: f.handling ?? [], active: f.active !== false, stock: p.id ? null : num(f.stock),
         length_cm: f.length_cm ?? null, width_cm: f.width_cm ?? null, height_cm: f.height_cm ?? null } });
       if (r?.ok !== false) onDone();
@@ -217,23 +228,31 @@ function Moves({ product, compact }) {
 }
 
 // ----------------------------------------------------------------- à commander
-function ToOrder({ ov }) {
+function ToOrder({ ov, canBuy, onCreated }) {
+  const [run, busy] = useAction();
   const list = (ov.data?.products ?? []).filter((p) => p.active && ['low', 'out'].includes(p.state)).sort((a, b) => (a.supplier ?? '').localeCompare(b.supplier ?? '') || a.name.localeCompare(b.name));
   const text = () => {
     const by = new Map(); for (const p of list) (by.get(p.supplier || 'Sans fournisseur') ?? by.set(p.supplier || 'Sans fournisseur', []).get(p.supplier || 'Sans fournisseur')).push(p);
-    return [...by].map(([s, ps]) => `${s} :\n${ps.map((p) => `- ${p.name}${p.sku ? ` (${p.sku})` : ''} : ${p.to_order || (p.min_stock ?? 1)}`).join('\n')}`).join('\n\n');
+    return [...by].map(([s, ps]) => `${s} :\n${ps.filter((p) => p.to_order > 0).map((p) => `- ${p.name}${p.sku ? ` (${p.sku})` : ''} : ${p.to_order}`).join('\n')}`).join('\n\n');
   };
   if (ov.loading && !ov.data) return <Loading />;
   if (!list.length) return <Card><Empty icon="check">Rien à commander : aucun produit sous son seuil d'alerte.<br /><span className="small">Fixez un seuil dans la fiche de chaque produit pour être prévenu.</span></Empty></Card>;
   return <div className="stack">
-    <div className="row"><Btn kind="primary" onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(`Commande de réassort :\n\n${text()}`)}`, '_blank', 'noopener')}><Icon name="message" size={16} />Envoyer par WhatsApp</Btn>
+    <div className="row" style={{ flexWrap: 'wrap' }}>{canBuy && <Btn kind="primary" disabled={busy} onClick={() => run(async () => {
+      const r = await rpc('lg_purchase_orders_from_alerts', {});
+      if (r.without_supplier?.length) alert(`Sans fournisseur (à compléter dans la fiche) : ${r.without_supplier.join(', ')}`);
+      if (r.created.length) onCreated(); ov.reload();
+      return r.created.length ? r : { ok: false, error: 'nothing_to_order' };
+    }, { ok: 'Bons de commande créés (brouillons à vérifier)' })}><Icon name="receipt" size={16} />Créer les bons de commande</Btn>}
+      <Btn onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(`Commande de réassort :\n\n${text()}`)}`, '_blank', 'noopener')}><Icon name="message" size={16} />Envoyer par WhatsApp</Btn>
       <Btn onClick={() => navigator.clipboard?.writeText(text())}>Copier la liste</Btn>
       <Btn onClick={() => downloadCsv('a-commander.csv', [['fournisseur', 'produit', 'reference', 'stock', 'reserve', 'disponible', 'seuil', 'a_commander'],
         ...list.map((p) => [p.supplier, p.name, p.sku, p.stock, p.reserved, p.available, p.min_stock, p.to_order])])}>Exporter (Excel)</Btn></div>
-    <Card><div className="scroll-x"><table className="tbl"><thead><tr><th>Produit</th><th>Fournisseur</th><th className="num">Disponible</th><th className="num">Seuil</th><th className="num">À commander</th><th>État</th></tr></thead>
+    <Card><div className="scroll-x"><table className="tbl"><thead><tr><th>Produit</th><th>Fournisseur</th><th className="num">Disponible</th><th className="num">Seuil</th><th className="num">En commande</th><th className="num">À commander</th><th>État</th></tr></thead>
       <tbody>{list.map((p) => <tr key={p.id}><td><b>{p.name}</b><div className="small muted">{p.sku}</div></td><td>{p.supplier ?? '—'}</td><td className="num">{n(p.available)}</td>
-        <td className="num">{n(p.min_stock)}</td><td className="num"><b>{n(p.to_order || p.min_stock)}</b></td><td><Badge kind={STATE[p.state][1]}>{STATE[p.state][0]}</Badge></td></tr>)}</tbody></table></div></Card>
-    <p className="small muted">Quantité proposée : de quoi revenir à deux fois le seuil d'alerte, en tenant compte des commandes déjà réservées.</p>
+        <td className="num">{n(p.min_stock)}</td><td className="num">{p.on_order ? n(p.on_order) : ''}</td><td className="num"><b>{p.to_order ? n(p.to_order) : '—'}</b></td><td><Badge kind={STATE[p.state][1]}>{STATE[p.state][0]}</Badge></td></tr>)}</tbody></table></div></Card>
+    <p className="small muted">Quantité proposée : de quoi revenir à deux fois le seuil d'alerte, en tenant compte des commandes clients réservées et de ce qui
+      est déjà en commande chez les fournisseurs. « Créer les bons de commande » prépare un brouillon par fournisseur.</p>
   </div>;
 }
 

@@ -116,14 +116,14 @@ export function clampStatements(ctx, loc, newQty, today) {
  * un inventaire commence le suivi d'un produit jusque-là non suivi (stock NULL) ; une sortie ne le fait pas.
  * L'emplacement (product_locations) est tenu à part par l'appelant (rangement, prélèvement, inventaire).
  */
-export function stockMoveStatements(ctx, { product, delta, kind, location = null, order = null, ref = null, reason = null }) {
+export function stockMoveStatements(ctx, { product, delta, kind, location = null, order = null, ref = null, reason = null, po = null }) {
   const track = ['in', 'initial', 'adjust', 'count'].includes(kind) ? 1 : 0;
   const db = ctx.db; const cid = ctx.company.id;
   return [
     db.prepare(`UPDATE products SET stock = CASE WHEN stock IS NULL AND ? = 0 THEN NULL ELSE max(coalesce(stock, 0) + ?, 0) END, updated_at = ?
       WHERE id = ? AND company_id = ?`).bind(track, delta, ctx.now, product, cid),
-    db.prepare(`INSERT INTO stock_moves (company_id, product_id, location_id, kind, qty, stock_after, order_id, ref, reason, by_user, at)
-      SELECT ?, id, ?, ?, ?, stock, ?, ?, ?, ?, ? FROM products WHERE id = ? AND company_id = ?`)
-      .bind(cid, location, kind, delta, order, ref, reason, ctx.user?.id ?? null, ctx.now, product, cid),
+    db.prepare(`INSERT INTO stock_moves (company_id, product_id, location_id, kind, qty, stock_after, order_id, po_id, ref, reason, by_user, at)
+      SELECT ?, id, ?, ?, ?, stock, ?, ?, ?, ?, ?, ? FROM products WHERE id = ? AND company_id = ?`)
+      .bind(cid, location, kind, delta, order, po, ref, reason, ctx.user?.id ?? null, ctx.now, product, cid),
   ];
 }

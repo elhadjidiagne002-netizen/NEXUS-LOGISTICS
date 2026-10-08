@@ -30,7 +30,7 @@ async function productOf(ctx, { id, code }) {
   return p;
 }
 
-async function locationOf(ctx, code) {
+export async function locationOf(ctx, code) {
   const c = String(code ?? '').trim().toUpperCase();
   if (!c) return null;
   if (vendorOnly(ctx)) fail('forbidden', 403); // les emplacements d'entrepôt ne concernent pas les vendeurs
@@ -39,6 +39,29 @@ async function locationOf(ctx, code) {
     .bind(ctx.company.id, c, hub).first();
   if (!l) fail('unknown_location', 404);
   return l;
+}
+
+/**
+ * Entrée de marchandise (réception libre ou d'un bon de commande) : emplacement et lot facultatifs, puis mouvement
+ * de stock « in ». Renvoie les instructions à mettre dans UN lot (atomique).
+ */
+export function receiveStatements(ctx, { product, qty, loc = null, lot = null, exp = null, ref = null, reason = null, po = null }) {
+  const cid = ctx.company.id; const stmts = [];
+  if (loc) {
+    stmts.push(ctx.db.prepare(`INSERT INTO product_locations (company_id, product_id, location_id, qty, updated_at) VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT (product_id, location_id) DO UPDATE SET qty = product_locations.qty + excluded.qty, updated_at = excluded.updated_at`)
+      .bind(cid, product, loc.id, qty, ctx.now));
+    if (lot || exp) {
+      stmts.push(ctx.db.prepare(`INSERT INTO stock_lots (id, company_id, product_id, location_id, lot_code, expires_on, qty) VALUES (?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT (product_id, location_id, coalesce(lot_code, ''), coalesce(expires_on, '9999-12-31')) DO UPDATE SET qty = stock_lots.qty + excluded.qty, updated_at = ?`)
+        .bind(uuid(), cid, product, loc.id, lot, exp, qty, ctx.now));
+      stmts.push(ctx.db.prepare(`INSERT INTO lot_moves (company_id, lot_id, kind, qty, by_user)
+          SELECT ?, id, 'in', ?, ? FROM stock_lots WHERE product_id = ? AND location_id = ? AND coalesce(lot_code, '') = ? AND coalesce(expires_on, '9999-12-31') = ?`)
+        .bind(cid, qty, ctx.user.id, product, loc.id, lot ?? '', exp ?? '9999-12-31'));
+    }
+  }
+  stmts.push(...stockMoveStatements(ctx, { product, delta: qty, kind: 'in', location: loc?.id ?? null, ref, reason, po }));
+  return stmts;
 }
 
 export function stockState(p, available) {
@@ -56,24 +79,30 @@ export default {
       canView(ctx);
       const own = vendorOnly(ctx) ? ctx.user.id : null; const cid = ctx.company.id;
       const q = text(a.p_q, 60);
-      const [prods, reserved, locs] = await ctx.db.batch([
-        ctx.db.prepare(`SELECT * FROM products WHERE company_id = ? AND (? IS NULL OR vendor_id = ?) AND (? = 1 OR active = 1)
-            AND (? IS NULL OR name LIKE ? OR upper(sku) = upper(?) OR upper(barcode) = upper(?)) ORDER BY name LIMIT 1000`)
+      const [prods, reserved, locs, ordered] = await ctx.db.batch([
+        ctx.db.prepare(`SELECT p.*, s.name AS supplier_name FROM products p LEFT JOIN suppliers s ON s.id = p.supplier_id
+            WHERE p.company_id = ? AND (? IS NULL OR p.vendor_id = ?) AND (? = 1 OR p.active = 1)
+            AND (? IS NULL OR p.name LIKE ? OR upper(p.sku) = upper(?) OR upper(p.barcode) = upper(?)) ORDER BY p.name LIMIT 1000`)
           .bind(cid, own, own, a.p_inactive ? 1 : 0, q, q && like(q), q, q),
         ctx.db.prepare(`SELECT oi.product_id, sum(max(oi.quantity - coalesce(oi.picked_qty, 0), 0)) AS qty FROM order_items oi JOIN orders o ON o.id = oi.order_id
             WHERE oi.company_id = ? AND o.status IN ('pending', 'processing') AND oi.line_status = 'open' AND oi.product_id IS NOT NULL GROUP BY oi.product_id`).bind(cid),
         ctx.db.prepare(`SELECT pl.product_id, l.code, pl.qty FROM product_locations pl JOIN stock_locations l ON l.id = pl.location_id
             WHERE pl.company_id = ? AND pl.qty > 0 ORDER BY l.code`).bind(cid),
+        ctx.db.prepare(`SELECT l.product_id, sum(max(l.qty_ordered - l.qty_received, 0)) AS qty FROM purchase_order_lines l JOIN purchase_orders o ON o.id = l.po_id
+            WHERE l.company_id = ? AND o.status IN ('draft', 'sent', 'partial') GROUP BY l.product_id`).bind(cid),
       ]);
+      const onOrder = new Map(ordered.results.map((r) => [r.product_id, r.qty]));
       const res = new Map(reserved.results.map((r) => [r.product_id, r.qty]));
       const where = new Map();
       for (const l of locs.results) (where.get(l.product_id) ?? where.set(l.product_id, []).get(l.product_id)).push({ code: l.code, qty: l.qty });
       const rows = prods.results.map((p) => {
         const r = res.get(p.id) ?? 0; const available = p.stock == null ? null : p.stock - r;
         const state = stockState(p, available ?? 0);
-        return { id: p.id, name: p.name, sku: p.sku, barcode: p.barcode, vendor: p.vendor_name, supplier: p.supplier, active: Boolean(p.active),
+        const oo = onOrder.get(p.id) ?? 0;
+        return { id: p.id, name: p.name, sku: p.sku, barcode: p.barcode, vendor: p.vendor_name, supplier: p.supplier_name ?? p.supplier, supplier_id: p.supplier_id,
+          on_order: oo, active: Boolean(p.active),
           price_fcfa: p.price_fcfa, cost_fcfa: p.cost_fcfa, weight_g: p.weight_g, stock: p.stock, reserved: r, available, min_stock: p.min_stock, state,
-          to_order: p.min_stock != null && available != null && available <= p.min_stock ? Math.max(p.min_stock * 2 - available, 1) : 0,
+          to_order: p.min_stock != null && available != null && available <= p.min_stock ? Math.max(Math.max(p.min_stock * 2 - available, 1) - oo, 0) : 0,
           locations: where.get(p.id) ?? [], value_fcfa: p.stock > 0 ? p.stock * (p.cost_fcfa ?? p.price_fcfa ?? 0) : 0, updated_at: p.updated_at };
       });
       const f = a.p_filter;
@@ -99,21 +128,7 @@ export default {
         if (exp && !DATE.test(exp)) fail('invalid_date');
         if (exp && exp < today(ctx)) return { ok: false, error: 'expired_lot' };
         if ((lot || exp) && !loc) fail('location_required'); // un lot daté se range à un emplacement (prélèvement FEFO)
-        const cid = ctx.company.id; const stmts = [];
-        if (loc) {
-          stmts.push(ctx.db.prepare(`INSERT INTO product_locations (company_id, product_id, location_id, qty, updated_at) VALUES (?, ?, ?, ?, ?)
-              ON CONFLICT (product_id, location_id) DO UPDATE SET qty = product_locations.qty + excluded.qty, updated_at = excluded.updated_at`)
-            .bind(cid, p.id, loc.id, qty, ctx.now));
-          if (lot || exp) {
-            stmts.push(ctx.db.prepare(`INSERT INTO stock_lots (id, company_id, product_id, location_id, lot_code, expires_on, qty) VALUES (?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT (product_id, location_id, coalesce(lot_code, ''), coalesce(expires_on, '9999-12-31')) DO UPDATE SET qty = stock_lots.qty + excluded.qty, updated_at = ?`)
-              .bind(uuid(), cid, p.id, loc.id, lot, exp, qty, ctx.now));
-            stmts.push(ctx.db.prepare(`INSERT INTO lot_moves (company_id, lot_id, kind, qty, by_user)
-                SELECT ?, id, 'in', ?, ? FROM stock_lots WHERE product_id = ? AND location_id = ? AND coalesce(lot_code, '') = ? AND coalesce(expires_on, '9999-12-31') = ?`)
-              .bind(cid, qty, ctx.user.id, p.id, loc.id, lot ?? '', exp ?? '9999-12-31'));
-          }
-        }
-        stmts.push(...stockMoveStatements(ctx, { product: p.id, delta: qty, kind: 'in', location: loc?.id ?? null, ref: text(a.p_ref, 80), reason: text(a.p_note, 200) }));
+        const stmts = receiveStatements(ctx, { product: p.id, qty, loc, lot, exp, ref: text(a.p_ref, 80), reason: text(a.p_note, 200) });
         await ctx.db.batch(stmts);
         const after = await ctx.db.prepare('SELECT stock FROM products WHERE id = ?').bind(p.id).first('stock');
         await audit(ctx, 'stock_receive', 'product', p.id, { qty, location: loc?.code ?? null, lot, ref: a.p_ref ?? null });
@@ -226,6 +241,13 @@ export default {
         for (const f of found) { if (f.sku) existing.set(up(f.sku), f); if (f.barcode) existing.set(up(f.barcode), f); }
       }
       const opt = (v) => (v == null || String(v).trim() === '' ? null : int(String(v).replace(/[\s ]/g, '').replace(',', '.')));
+      // fournisseurs : retrouvés par leur nom, créés s'ils n'existent pas encore (une fois par nom)
+      const supNames = [...new Set(rows.map((r) => text(r?.supplier, 80)).filter(Boolean).map((x) => x.toLowerCase()))];
+      const sup = new Map((await ctx.db.prepare('SELECT id, name FROM suppliers WHERE company_id = ?').bind(cid).all()).results.map((s) => [s.name.toLowerCase(), s.id]));
+      const newSup = [];
+      for (const nm of supNames) if (!sup.has(nm)) { const id = uuid(); sup.set(nm, id); newSup.push([id, rows.map((r) => text(r?.supplier, 80)).find((x) => x?.toLowerCase() === nm)]); }
+      if (newSup.length && !own) await ctx.db.batch(newSup.map(([id, nm]) => ctx.db.prepare('INSERT INTO suppliers (id, company_id, name) VALUES (?, ?, ?)').bind(id, cid, nm)));
+      const supId = (r) => { const nm = text(r?.supplier, 80); return nm && !own ? sup.get(nm.toLowerCase()) ?? null : null; };
       const results = []; const stmts = [];
       rows.forEach((r, i) => {
         const line = i + 2; // ligne du fichier (en-tête = ligne 1)
@@ -240,15 +262,15 @@ export default {
         if (prev) {
           if (!a.p_update) { results.push({ line, ok: true, skipped: true, name }); return; }
           stmts.push(ctx.db.prepare(`UPDATE products SET name = ?, price_fcfa = ?, weight_g = coalesce(?, weight_g), min_stock = coalesce(?, min_stock),
-              cost_fcfa = coalesce(?, cost_fcfa), supplier = coalesce(?, supplier), sku = coalesce(?, sku), barcode = coalesce(?, barcode), updated_at = ? WHERE id = ? AND company_id = ?`)
-            .bind(name, price, w, min, cost, text(r.supplier, 80), text(r.sku, 64), text(r.barcode, 64), ctx.now, prev.id, cid));
+              cost_fcfa = coalesce(?, cost_fcfa), supplier = coalesce(?, supplier), supplier_id = coalesce(?, supplier_id), sku = coalesce(?, sku), barcode = coalesce(?, barcode), updated_at = ? WHERE id = ? AND company_id = ?`)
+            .bind(name, price, w, min, cost, text(r.supplier, 80), supId(r), text(r.sku, 64), text(r.barcode, 64), ctx.now, prev.id, cid));
           results.push({ line, ok: true, updated: true, name });
           return;
         }
         const id = uuid();
-        stmts.push(ctx.db.prepare(`INSERT INTO products (id, company_id, vendor_id, vendor_name, name, sku, barcode, price_fcfa, weight_g, min_stock, cost_fcfa, supplier, handling)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]')`)
-          .bind(id, cid, own, own ? ctx.user.name : text(r.vendor_name, 80), name, text(r.sku, 64), text(r.barcode, 64), price, w, min, cost, text(r.supplier, 80)));
+        stmts.push(ctx.db.prepare(`INSERT INTO products (id, company_id, vendor_id, vendor_name, name, sku, barcode, price_fcfa, weight_g, min_stock, cost_fcfa, supplier, supplier_id, handling)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]')`)
+          .bind(id, cid, own, own ? ctx.user.name : text(r.vendor_name, 80), name, text(r.sku, 64), text(r.barcode, 64), price, w, min, cost, text(r.supplier, 80), supId(r)));
         if (stock != null) stmts.push(...stockMoveStatements(ctx, { product: id, delta: stock, kind: 'initial', reason: 'import du catalogue' }));
         for (const k of [up(r.sku), up(r.barcode)].filter(Boolean)) existing.set(k, { id, vendor_id: own }); // doublon dans le même fichier
         results.push({ line, ok: true, created: true, name });

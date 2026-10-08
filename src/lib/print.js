@@ -83,3 +83,26 @@ export function printInvoice(inv) {
 export function printReceipt(text, title = 'Reçu') {
   open(title, '@page{size:80mm auto;margin:4mm}body{font:11pt ui-monospace,Consolas,monospace}', `<pre style="white-space:pre-wrap">${esc(text)}</pre>`);
 }
+
+/** Bon de commande fournisseur (achats de réassort) : à imprimer, signer ou enregistrer en PDF. */
+export function printPurchaseOrder(po) {
+  const c = po.company ?? {}; const s = po.supplier ?? {};
+  const lines = (po.lines ?? []).map((l) => `<tr><td>${esc(l.name)}${l.sku ? `<br><small>${esc(l.sku)}</small>` : ''}</td><td class="r">${l.qty_ordered}</td>
+    <td class="r">${formatF(l.unit_cost_fcfa)}</td><td class="r">${formatF(l.qty_ordered * l.unit_cost_fcfa)}</td></tr>`).join('');
+  const day = (d) => (d ? d.split('-').reverse().join('/') : '');
+  open(po.number, `@page{size:A4;margin:14mm}body{font-size:10.5pt}.top{display:flex;justify-content:space-between;gap:10mm}
+  h1{font-size:20pt;margin:0 0 2mm}.box{border:1px solid #000;padding:3mm;flex:1}table{width:100%;border-collapse:collapse;margin-top:6mm}
+  th,td{border-bottom:1px solid #999;padding:2mm;text-align:left}.r{text-align:right}.tot{width:70mm;margin-left:auto;margin-top:4mm;font-size:13pt;font-weight:800;
+  display:flex;justify-content:space-between;border-top:2px solid #000;padding-top:2mm}.sig{display:flex;gap:10mm;margin-top:14mm}.sig div{flex:1;border-top:1px solid #000;padding-top:2mm;font-size:9pt}`,
+  `<div class="top"><div><h1>BON DE COMMANDE</h1><div><b>${esc(po.number)}</b></div><div>Date : ${dt(po.created_at)}</div>
+    ${po.expected_on ? `<div>Livraison souhaitée : <b>${day(po.expected_on)}</b></div>` : ''}</div>
+    <div style="text-align:right"><b>${esc(c.name)}</b><br>${esc(c.address ?? c.city ?? '')}<br>${esc(c.phone ?? '')}
+      ${c.ninea ? `<br>NINEA : ${esc(c.ninea)}` : ''}${c.rc ? ` · RC : ${esc(c.rc)}` : ''}</div></div>
+   <div class="top" style="margin-top:6mm"><div class="box"><b>Fournisseur</b><br>${esc(s.name)}${s.contact_name ? `<br>${esc(s.contact_name)}` : ''}
+     ${s.phone ? `<br>${esc(s.phone)}` : ''}${s.email ? `<br>${esc(s.email)}` : ''}${s.address ? `<br>${esc(s.address)}` : ''}</div>
+     <div class="box"><b>Conditions</b><br>Paiement : ${esc(s.payment_terms ?? 'à convenir')}${po.note ? `<br>${esc(po.note)}` : ''}</div></div>
+   <table><thead><tr><th>Article</th><th class="r">Quantité</th><th class="r">Prix unitaire</th><th class="r">Montant</th></tr></thead><tbody>${lines}</tbody></table>
+   <div class="tot"><span>Total</span><span>${formatF(po.total_fcfa)}</span></div>
+   <p style="font-size:9pt">Merci de rappeler le n° ${esc(po.number)} sur votre bon de livraison et votre facture. Montants en francs CFA.</p>
+   <div class="sig"><div>Pour ${esc(c.name)}</div><div>Le fournisseur — bon pour accord</div></div>`);
+}

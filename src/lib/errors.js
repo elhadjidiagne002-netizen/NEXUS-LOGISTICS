@@ -1,5 +1,17 @@
 // Codes renvoyés par les fonctions de la base → phrases courtes pour le terrain.
 const M = {
+  // fournisseurs et bons de commande
+  unknown_supplier: 'Fournisseur inconnu.',
+  duplicate_supplier: 'Un fournisseur porte déjà ce nom.',
+  unknown_po: 'Bon de commande inconnu.',
+  no_lines: 'Ajoutez au moins un article.',
+  too_many_lines: 'Trop d’articles sur un même bon (100 au plus).',
+  po_not_draft: 'Ce bon a déjà été envoyé : il ne se modifie plus.',
+  po_closed: 'Ce bon est déjà reçu ou annulé.',
+  po_not_partial: 'Seul un bon reçu en partie peut être soldé.',
+  po_changed: 'Le bon vient d’être modifié par quelqu’un d’autre : rouvrez-le.',
+  over_receipt: 'Quantité reçue supérieure à ce qui reste à recevoir.',
+  nothing_to_order: 'Rien à commander (ou déjà en commande, ou produits sans fournisseur).',
   // produits et stock
   duplicate_code: 'Ce code-barres ou cette référence est déjà utilisé par un autre produit.',
   location_required: 'Un lot ou une date de péremption se range à un emplacement : choisissez-en un.',

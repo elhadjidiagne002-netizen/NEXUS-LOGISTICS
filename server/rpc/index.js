@@ -33,9 +33,10 @@ import webhooks from './webhooks.js';
 import engagements from './engagements.js';
 import plateforme from './plateforme.js';
 import produits from './produits.js';
+import achats from './achats.js';
 
 export const REGISTRY = { ...socle, ...tarifs, ...commandes, ...suivi, ...preparation, ...entrepot, ...flotte, ...voyages,
-  ...terrain, ...retours, ...caisse, ...factures, ...pilotage, ...messages, ...offre, ...webhooks, ...engagements, ...plateforme, ...produits };
+  ...terrain, ...retours, ...caisse, ...factures, ...pilotage, ...messages, ...offre, ...webhooks, ...engagements, ...plateforme, ...produits, ...achats };
 
 
 export async function buildContext(request, env) {

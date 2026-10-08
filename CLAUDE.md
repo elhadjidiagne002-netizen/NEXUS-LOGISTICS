@@ -43,6 +43,11 @@ Plan et état : **`ROADMAP.md`**. Historique : `JOURNAL.md`.
   Les quantités par emplacement (`product_locations`) restent le détail physique d'entrepôt. Modifier une fiche
   produit ne touche jamais au stock (stock de départ à la création seulement). Écran : `/stock`
   (`src/screens/Stock.jsx`, `server/rpc/produits.js`).
+- **Achats** : fournisseurs (`suppliers`, `products.supplier_id`) et bons de commande (`purchase_orders`,
+  `purchase_order_lines`, `server/rpc/achats.js`, écran `src/components/purchasing.jsx` dans `/stock`). Numéro
+  « BC-AAAA-000001 » pris dans le MÊME lot que la création (compteur `bc-AAAA`). La réception passe par
+  `receiveStatements()` (`server/rpc/produits.js`, partagé avec l'entrée libre) : mouvement « in » avec `po_id` et
+  la réf. du bon, dernier prix d'achat recopié sur le produit. « À commander » déduit ce qui est déjà en commande.
 - **Historique** : la version Postgres d'origine (`supabase/`, `test/sql/`, mode démo PGlite) a été supprimée
   après portage complet ; pour relire sa logique : `git show 708861b:supabase/migrations/<fichier>`.
 

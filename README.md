@@ -17,7 +17,7 @@ En ligne : **https://logistique.nexusmarket.sn** — formule gratuite (300 comma
 | Base (D1 `nexus-logistics`, multi-entreprises) | `migrations/*.sql` |
 | Tâches planifiées (toutes les 5 min) | appelées par `nexus-cron` (dépôt nexus-market) |
 | API des boutiques en ligne, statuts signés | `docs/integration-boutiques.md` |
-| Produits et stock (`/stock` : entrées, mouvements, à commander, import Excel) | `src/screens/Stock.jsx`, `server/rpc/produits.js`, `server/rpc/stock.js` |
+| Produits et stock (`/stock` : entrées, mouvements, à commander, fournisseurs, bons de commande, import Excel) | `src/screens/Stock.jsx`, `server/rpc/produits.js`, `server/rpc/stock.js` |
 | Administration de la plateforme (`/admin/`, compte Devizo) | `src/admin/`, `server/routes/admin.js`, `server/rpc/plateforme.js` |
 
 Chaque entreprise ne voit que ses données (`company_id` sur toutes les tables, test d'isolation pour chaque

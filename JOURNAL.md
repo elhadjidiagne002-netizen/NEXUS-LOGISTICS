@@ -2,6 +2,24 @@
 
 Le plus récent en premier.
 
+## 08/10/2026 — Fournisseurs et bons de commande
+- **Demande** : ajouter la gestion des fournisseurs et des bons de commande.
+- **Fait** (migration `0014_achats.sql`, `server/rpc/achats.js`, `src/components/purchasing.jsx`) : onglets
+  « Bons de commande » et « Fournisseurs » dans Produits et stock. Fiche fournisseur (contact, WhatsApp, e-mail,
+  délai habituel, conditions de paiement, achats sur 12 mois) ; fournisseur habituel choisi dans la fiche produit
+  (les noms déjà saisis en texte sont devenus des fiches, reprise faite par la migration ; l'import Excel crée les
+  fournisseurs manquants). Bon de commande : brouillon modifiable → envoyé (WhatsApp pré-rempli au fournisseur, ou
+  impression / PDF signable) → reçu en partie → reçu ; annulation motivée ; solde d'un reliquat. Réception d'un bon
+  ligne par ligne (emplacement facultatif) : entrée en stock tracée avec le n° du bon, dernier prix d'achat mis à
+  jour, refus au-delà du reste à recevoir, rejeu sans double comptage. « À commander » : colonne « en commande » et
+  bouton « Créer les bons de commande » (un brouillon par fournisseur, date attendue = délai du fournisseur, rien en
+  double si déjà commandé, produits sans fournisseur signalés).
+- **Droits** : chef de quai et comptable commandent, chef de quai et préparateur réceptionnent, les autres membres de
+  l'équipe consultent ; vendeurs et chauffeurs n'y ont pas accès.
+- **Vérifié** : 3 tests serveur (cycle complet, partiel puis total, rejeu, numéros sans trou, propositions sans
+  doublon, droits, isolation) ; 103 tests au total ; parcours complet dans l'aperçu (fournisseur, proposition,
+  prix, envoi WhatsApp, réception : stock 8 → 20, prix d'achat 4 800 F, historique « BC-2026-000001 »).
+
 ## 08/10/2026 — Produits et stock : un vrai module, et un stock enfin juste
 - **Remarque de l'utilisateur** : « je ne vois pas où et comment faire entrer les produits, et pas de gestion de stock
   poussée ». Constat : le catalogue était caché dans Service client → « Produits » (présenté comme facultatif) ; le

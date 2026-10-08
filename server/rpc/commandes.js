@@ -282,7 +282,7 @@ const productOut = (p) => ({
   id: p.id, name: p.name, sku: p.sku, barcode: p.barcode, price_fcfa: p.price_fcfa, stock: p.stock, weight_g: p.weight_g,
   length_cm: p.length_cm, width_cm: p.width_cm, height_cm: p.height_cm, handling: parseJson(p.handling, []),
   is_shippable: Boolean(p.is_shippable), active: Boolean(p.active), vendor: p.vendor_name, vendor_id: p.vendor_id,
-  internal_code: 'NXI-' + orderShort(p.id), min_stock: p.min_stock ?? null, cost_fcfa: p.cost_fcfa ?? null, supplier: p.supplier ?? null,
+  internal_code: 'NXI-' + orderShort(p.id), min_stock: p.min_stock ?? null, cost_fcfa: p.cost_fcfa ?? null, supplier: p.supplier ?? null, supplier_id: p.supplier_id ?? null,
 });
 const handlingOf = (v) => (Array.isArray(v) ? JSON.stringify([...new Set(v.filter((h) => HANDLING.includes(h)))]) : null);
 const dim = (v) => { const n = num(v); if (n != null && (n <= 0 || n > 1000)) fail('invalid_amount'); return n; };
@@ -488,8 +488,14 @@ export default {
       const opt = (v) => (v == null || v === '' ? null : int(v));
       const minStock = opt(p.min_stock); const cost = opt(p.cost_fcfa);
       if (price < 0 || (w != null && w <= 0) || (minStock != null && minStock < 0) || (cost != null && cost < 0)) fail('invalid_amount');
+      let supplierId = null; let supplierName = text(p.supplier, 80);
+      if (p.supplier_id) {
+        const s = await ctx.db.prepare('SELECT id, name FROM suppliers WHERE id = ? AND company_id = ?').bind(String(p.supplier_id), ctx.company.id).first();
+        if (!s) fail('unknown_supplier', 404);
+        supplierId = s.id; supplierName = s.name;
+      }
       const vals = [name, text(p.sku, 64), text(p.barcode, 64), price, w, dim(p.length_cm), dim(p.width_cm), dim(p.height_cm),
-        handlingOf(p.handling) ?? '[]', p.is_shippable === false ? 0 : 1, p.active === false ? 0 : 1, minStock, cost, text(p.supplier, 80)];
+        handlingOf(p.handling) ?? '[]', p.is_shippable === false ? 0 : 1, p.active === false ? 0 : 1, minStock, cost, supplierName, supplierId];
       // même code-barres ou même référence qu'un autre produit de l'entreprise : refusé (le scan doit être sans ambiguïté)
       const code = (v) => (v == null ? null : String(v).trim().toUpperCase());
       const dup = await ctx.db.prepare(`SELECT name FROM products WHERE company_id = ? AND id != ? AND
@@ -500,7 +506,7 @@ export default {
         const own = vendorOnly(ctx) ? ctx.user.id : null;
         const r = await ctx.db.prepare(
           `UPDATE products SET name = ?, sku = ?, barcode = ?, price_fcfa = ?, weight_g = ?, length_cm = ?, width_cm = ?, height_cm = ?,
-             handling = ?, is_shippable = ?, active = ?, min_stock = ?, cost_fcfa = ?, supplier = ?, vendor_name = coalesce(?, vendor_name), updated_at = ?
+             handling = ?, is_shippable = ?, active = ?, min_stock = ?, cost_fcfa = ?, supplier = ?, supplier_id = ?, vendor_name = coalesce(?, vendor_name), updated_at = ?
            WHERE id = ? AND company_id = ? AND (? IS NULL OR vendor_id = ?)`,
         ).bind(...vals, staff ? text(p.vendor_name, 80) : null, ctx.now, String(p.id), ctx.company.id, own, own).run();
         if (!r.meta.changes) fail('unknown_product', 404);
@@ -512,8 +518,8 @@ export default {
       if (initial != null && initial < 0) fail('invalid_quantity');
       await ctx.db.batch([
         ctx.db.prepare(
-          `INSERT INTO products (name, sku, barcode, price_fcfa, weight_g, length_cm, width_cm, height_cm, handling, is_shippable, active, min_stock, cost_fcfa, supplier,
-             id, company_id, vendor_id, vendor_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO products (name, sku, barcode, price_fcfa, weight_g, length_cm, width_cm, height_cm, handling, is_shippable, active, min_stock, cost_fcfa, supplier, supplier_id,
+             id, company_id, vendor_id, vendor_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         ).bind(...vals, id, ctx.company.id, vendorOnly(ctx) ? ctx.user.id : null, vendorOnly(ctx) ? ctx.user.name : text(p.vendor_name, 80)),
         ...(initial != null ? stockMoveStatements(ctx, { product: id, delta: initial, kind: 'initial', reason: 'stock de départ' }) : []),
       ]);
