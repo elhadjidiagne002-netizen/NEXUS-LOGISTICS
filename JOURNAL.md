@@ -2,6 +2,14 @@
 
 Le plus récent en premier.
 
+## 08/10/2026 — NEXUS Market branché côté nexus-market ; prix `price_fcfa` accepté par l'API
+- **nexus-market** (commit `5765b4e`) : envoi des commandes payées (Stripe, PayTech) et à payer à la livraison à
+  `POST /api/v1/orders` ; route `POST /api/logistique/webhook` (signature HMAC vérifiée, statut conditionnel, lien de
+  suivi) ; `lg-fallback.js` retiré. Inactif tant que `NXL_API_KEY` / `NXL_WEBHOOK_SECRET` ne sont pas posés.
+- **Défaut trouvé** : la notice annonçait `price_fcfa` pour les articles alors que le serveur lisait seulement
+  `unit_price_fcfa` → une boutique suivant la notice aurait envoyé des articles à 0 F. Les deux noms sont
+  acceptés (test ajouté), notice corrigée et complétée (zone obligatoire, sinon `unknown_zone`).
+
 ## 08/10/2026 — Bascule : logistique.nexusmarket.sn sert la version complète, démo supprimée
 - **Rapatrié** : cycles C2 à C11 réalisés par la routine cloud (79 tests serveur) ; local = GitHub.
 - **Base en ligne** : les migrations 0002 à 0011 étaient déjà appliquées (0002 à 12:42, 0003-0011 à 18:02) ; une

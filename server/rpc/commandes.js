@@ -83,7 +83,9 @@ function buildOrder(ctx, pricing, look, input, source) {
   for (const x of rawItems) {
     const p = (x?.product_id && look.byId.get(String(x.product_id))) || (x?.sku && look.bySku.get(String(x.sku))) || null;
     if (x?.product_id && !p) return { error: 'unknown_product' };
-    const qty = int(x?.quantity ?? 1); const price = x?.unit_price_fcfa == null || x.unit_price_fcfa === '' ? p?.price_fcfa ?? 0 : int(x.unit_price_fcfa);
+    // prix unitaire : unit_price_fcfa (nom canonique) ou price_fcfa (nom utilisé par l'ancienne notice de l'API)
+    const given = x?.unit_price_fcfa ?? x?.price_fcfa;
+    const qty = int(x?.quantity ?? 1); const price = given == null || given === '' ? p?.price_fcfa ?? 0 : int(given);
     const w = x?.weight_g == null || x.weight_g === '' ? p?.weight_g ?? null : int(x.weight_g);
     const pname = text(x?.name, 120) ?? p?.name;
     if (!pname) return { error: 'invalid_item' };

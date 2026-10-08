@@ -102,3 +102,16 @@ test('isolation et rôles : la clé d\'une entreprise ne lit pas les commandes d
   for (const fn of ['lg_webhook_get', 'lg_webhook_save']) assert.equal(await S.support.rpcError(fn, {}), 'forbidden', fn);
   assert.equal(await new Client(env).rpcError('lg_webhook_get', {}), 'auth');
 });
+
+test('boutique : le prix unitaire est lu sous unit_price_fcfa ou price_fcfa (ancienne notice)', async () => {
+  const env = makeEnv();
+  const S = await setup(env);
+  const key = (await S.admin.rpc('lg_api_key_create', { p_name: 'Boutique' })).key;
+  const send = (ref, item) => call(env, 'POST', '/api/v1/orders', key, { external_ref: ref, customer: { name: 'Aminata Fall', phone: '771234567' },
+    zone: 'Yoff', payment_method: 'cod', items: [{ name: 'Savon', quantity: 2, weight_g: 200, ...item }] });
+  const a = await send('A-1', { unit_price_fcfa: 1500 });
+  const b = await send('B-1', { price_fcfa: 1500 });
+  assert.deepEqual([a.status, b.status], [201, 201]);
+  const sub = (ref) => db(env).prepare('SELECT subtotal_fcfa AS s FROM orders WHERE external_ref = ?').get(ref).s;
+  assert.deepEqual([sub('A-1'), sub('B-1')], [3000, 3000]);
+});

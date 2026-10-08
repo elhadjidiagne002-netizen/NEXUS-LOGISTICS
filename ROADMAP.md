@@ -160,7 +160,7 @@ l'aperçu (`logistics-full`), migrations D1 appliquées en ligne, déploiement d
 - [x] Statuts renvoyés à la boutique par un appel signé HMAC-SHA256 (`order.confirmed` … `order.cancelled`),
       adresse et secret par entreprise (`lg_webhook_get/save`, secret chiffré), envoi et reprises par la tâche
       « messages » ; notice `docs/integration-boutiques.md`. 3 tests serveur.
-- [ ] Côté dépôt `nexus-market` (hors de ce dépôt) : envoyer les commandes, recevoir les statuts, retirer
+- [x] Côté dépôt `nexus-market` (08/10/2026, commit 5765b4e) : envoyer les commandes, recevoir les statuts, retirer
       `lg-fallback.js` — étapes détaillées au § 5 de `docs/integration-boutiques.md`.
 - Reste : migration `0010` à appliquer en ligne ; créer l'entreprise « NEXUS Market », sa clé et son adresse de rappel.
 

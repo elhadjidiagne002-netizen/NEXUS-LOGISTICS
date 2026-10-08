@@ -14,8 +14,11 @@ Content-Type: application/json
   "customer": { "name": "Aminata Fall", "phone": "771234567", "address": "Liberté 6", "landmark": "près de la mosquée" },
   "zone": "Yoff",
   "payment_method": "prepaid",            // ou "cod" (paiement à la livraison)
-  "items": [{ "name": "Riz 5 kg", "quantity": 1, "price_fcfa": 5000, "weight_g": 5000 }] }
+  "items": [{ "name": "Riz 5 kg", "quantity": 1, "unit_price_fcfa": 5000, "weight_g": 5000 }] }
 ```
+- Prix unitaire en FCFA entiers (`unit_price_fcfa` ; `price_fcfa` est aussi accepté). `zone` = nom d'une zone créée
+  dans Administration → Tarifs et zones (sans tenir compte des accents ni des majuscules), ou bien `customer.lat` /
+  `customer.lng` : sans zone reconnue, la commande est refusée (`unknown_zone`).
 - Une même `external_ref` n'est jamais créée deux fois : un renvoi rend la commande existante (`duplicate: true`).
 - Jusqu'à 50 commandes d'un coup : `{ "orders": [ … ] }`. 300 appels par heure et par clé.
 
