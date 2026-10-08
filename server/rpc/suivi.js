@@ -6,6 +6,7 @@ import { text, num, uuid, parseJson, distanceM } from './core.js';
 import { confirmCod, cancelOrder, amountDue, orderShort } from './commandes.js';
 import { zoneAt } from './tarifs.js';
 import { FAILURE_REASONS } from './terrain.js';
+import { invoiceDoc } from './factures.js';
 
 const TOKEN = /^[A-Za-z0-9_-]{16,64}$/;
 const REQUEST_KINDS = ['reschedule', 'callback', 'help', 'third_party'];
@@ -33,7 +34,7 @@ export default {
       ).bind(o.id, o.company_id).first();
       const rated = k.rated; const open = (o.status === 'pending' || o.status === 'processing') && !k.loaded;
       // arrêt de livraison le plus récent, échec éventuel, code de livraison (cycle C5) : une seule requête groupée
-      const [st, fl, dc] = await ctx.db.batch([
+      const [st, fl, dc, inv] = await ctx.db.batch([
         ctx.db.prepare(
           `SELECT s.id, s.seq, s.status, s.eta, s.lat, s.lng, t.id AS trip_id, t.status AS trip_status, c.name AS courier, c.rating_avg,
                   c.last_lat, c.last_lng, c.last_seen_at,
@@ -44,6 +45,7 @@ export default {
         ctx.db.prepare("SELECT completed_at, failure_reason FROM trip_stops WHERE order_id = ? AND company_id = ? AND status = 'failed' ORDER BY completed_at DESC LIMIT 1")
           .bind(o.id, o.company_id),
         ctx.db.prepare('SELECT code, verified_at, expires_at, attempts_left FROM delivery_codes WHERE order_id = ? AND company_id = ?').bind(o.id, o.company_id),
+        ctx.db.prepare('SELECT invoice_number FROM invoices WHERE order_id = ? AND company_id = ? AND credit_of IS NULL').bind(o.id, o.company_id),
       ]);
       const s = st.results[0]; const f = fl.results[0]; const code = dc.results[0];
       const live = s?.trip_status === 'in_progress';
@@ -76,7 +78,7 @@ export default {
         can_confirm: o.payment_method === 'cod' && !o.cod_confirmed_at && o.status !== 'cancelled' && o.status !== 'delivered',
         can_edit_address: open,
         can_rate: o.status === 'delivered' && !rated,
-        invoice: null,   // facture : cycle C6
+        invoice: inv.results[0] ? { number: inv.results[0].invoice_number } : null,
       };
     },
   },
@@ -180,6 +182,48 @@ export default {
       await ctx.db.prepare('UPDATE orders SET recipient_name = ?, recipient_phone = ?, updated_at = ? WHERE id = ? AND company_id = ?')
         .bind(name, phone, ctx.now, o.id, o.company_id).run();
       return { ok: true };
+    },
+  },
+
+  // Facture de la commande, pour l'imprimer depuis la page de suivi.
+  lg_track_invoice: {
+    roles: 'public',
+    async handler(ctx, a) {
+      const o = await byToken(ctx, a.p_token);
+      if (!o) return notFound;
+      const i = await ctx.db.prepare('SELECT * FROM invoices WHERE order_id = ? AND company_id = ? AND credit_of IS NULL').bind(o.id, o.company_id).first();
+      if (!i) return { ok: false, error: 'no_invoice' };
+      return { ...(await invoiceDoc(ctx, i)), ok: true };
+    },
+  },
+
+  // Propositions d'indemnité en attente de la réponse du client (incident résolu avec indemnité).
+  lg_track_incidents: {
+    roles: 'public',
+    async handler(ctx, a) {
+      const o = await byToken(ctx, a.p_token);
+      if (!o) return [];
+      return (await ctx.db.prepare(
+        `SELECT id, number, resolution, compensation_fcfa FROM incidents WHERE order_id = ? AND company_id = ? AND status = 'resolved' AND compensation_fcfa > 0
+            AND customer_agreed_at IS NULL AND customer_refused_at IS NULL ORDER BY created_at`,
+      ).bind(o.id, o.company_id).all()).results;
+    },
+  },
+
+  lg_track_incident_answer: {
+    roles: 'public',
+    async handler(ctx, a) {
+      const o = await byToken(ctx, a.p_token);
+      if (!o) return notFound;
+      const yes = a.p_accept === true;
+      const r = await ctx.db.prepare(
+        `UPDATE incidents SET ${yes ? "customer_agreed_at = ?, status = 'closed'" : "customer_refused_at = ?, status = 'investigating'"}, agreement_via = 'tracking'
+          WHERE id = ? AND order_id = ? AND company_id = ? AND status = 'resolved' AND customer_agreed_at IS NULL AND customer_refused_at IS NULL`,
+      ).bind(ctx.now, String(a.p_incident ?? ''), o.id, o.company_id).run();
+      if (!r.meta.changes) return { ok: false, error: 'nothing_to_answer' };
+      await ctx.db.prepare("INSERT INTO audit_log (company_id, action, entity, entity_id, detail) VALUES (?, 'incident_customer_answer', 'incident', ?, ?)")
+        .bind(o.company_id, String(a.p_incident), JSON.stringify({ accept: yes })).run();
+      return { ok: true, closed: yes };
     },
   },
 };

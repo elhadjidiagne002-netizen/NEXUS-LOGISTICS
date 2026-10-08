@@ -66,16 +66,17 @@ export function printInvoice(inv) {
   `<div class="top"><div><h1>${credit ? 'AVOIR' : 'FACTURE'} ${esc(inv.invoice_number)}</h1>
     <div>Date : ${dt(inv.issued_at ?? inv.created_at)}</div><div>Commande : ${esc(m.order_short ?? '')}</div>
     ${credit ? `<div>Avoir sur la facture ${esc(m.credit_of_number)} — ${esc(m.reason ?? '')}</div>` : ''}</div>
-    <div style="text-align:right"><b>NEXUS Market</b><br>Dakar, Sénégal<br>nexusmarket.sn</div></div>
+    <div style="text-align:right"><b>${esc(m.platform?.name ?? 'NEXUS Market')}</b><br>${esc(m.platform?.address ?? 'Dakar, Sénégal')}<br>${esc(m.platform?.phone ?? m.platform?.site ?? 'nexusmarket.sn')}</div></div>
    <div class="top" style="margin-top:6mm"><div class="box"><b>Vendeur</b><br>${esc(m.seller?.name)}<br>${esc(m.seller?.address ?? '')}<br>
      NINEA : ${esc(m.seller?.ninea ?? 'non communiqué')} · RC : ${esc(m.seller?.rc ?? '—')}<br>
-     <small>${m.issuer_mode === 'nexus' ? 'Facture émise par NEXUS Market' : 'Facture émise par NEXUS Market au nom et pour le compte du vendeur'}</small></div>
+     <small>${m.issuer_mode === 'company' ? `Facture émise par ${esc(m.seller?.name)}` : m.issuer_mode === 'nexus' ? 'Facture émise par NEXUS Market'
+       : `Facture émise par ${esc(m.platform?.name ?? 'NEXUS Market')} au nom et pour le compte du vendeur`}</small></div>
     <div class="box"><b>Client</b><br>${esc(m.customer?.name)}<br>${esc(m.customer?.phone ?? '')}<br>${esc(m.customer?.address ?? '')}</div></div>
    <table><thead><tr><th>Désignation</th><th class="r">Qté</th><th class="r">P.U. HT</th><th class="r">TVA</th><th class="r">Total HT</th></tr></thead><tbody>${lines}</tbody></table>
    <div class="tot"><div><span>Total HT</span><b>${formatF(inv.amount_ht)}</b></div><div><span>TVA</span><b>${formatF(inv.tva)}</b></div>
     <div class="g"><span>Total TTC</span><span>${formatF(inv.amount_ttc)}</span></div></div>
    <p><i>${esc(m.amount_words ?? '')}</i></p>
-   <p>Paiement : ${esc({ cod: 'à la livraison', mobile: 'mobile (PayTech)', card: 'carte' }[m.payment_method] ?? m.payment_method ?? '')}${m.payment_ref ? ' · réf. ' + esc(m.payment_ref) : ''}</p>
+   <p>Paiement : ${esc({ cod: 'à la livraison', prepaid: "payée d'avance", mobile: 'mobile (PayTech)', card: 'carte' }[m.payment_method] ?? m.payment_method ?? '')}${m.payment_ref ? ' · réf. ' + esc(m.payment_ref) : ''}</p>
    <div class="foot">Document non modifiable. Toute correction fait l'objet d'un avoir numéroté. Montants en francs CFA.</div>`);
 }
 

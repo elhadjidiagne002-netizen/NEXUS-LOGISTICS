@@ -100,13 +100,23 @@ l'aperçu (`logistics-full`), migrations D1 appliquées en ligne, déploiement d
       « livreur en route », « livré », « reprise prévue » → C8 ; `lg_my_reinforcements` (renforts) → C7 ;
       `lg_track_incidents` / réponse du client à une proposition d'incident → C11.
 
-## C6 — Caisse, factures, reversements → BASCULE
-- [ ] Versements chauffeur, comptage par billets, écarts → incident, rapprochement, gains chauffeur, reçu.
-- [ ] Factures et avoirs (numéros sans trou par année), export comptable, relevé de reversement vendeur.
+## C6 — Caisse, factures, reversements ✅ portage (08/10/2026) → BASCULE à faire
+- [x] Versements chauffeur (`lg_remit_cash`, comptage par billets), versements intermédiaires (`lg_cash_drop`),
+      écarts → incident `cash_gap`, rapprochement (caisse versée, pas d'écart ouvert, colis rendus, collectes reçues),
+      gains chauffeur au rapprochement (réglages `pay_*`, `bonus_*` ; retenue = gain négatif), reçu (`lg_cash_desk`).
+- [x] Factures à la livraison et avoirs (numéros sans trou par année : compteur dans le même lot), avoir automatique
+      sur retour d'un client livré, export comptable, relevés de reversement vendeur (`commission_pct`), facture sur
+      la page de suivi ; incidents (`lg_open_incident`, `lg_incidents_list`, `lg_resolve_incident` : retenue,
+      indemnité plafonnée, avoir, accord du client via `lg_track_incidents` / `lg_track_incident_answer`).
 - [ ] **BASCULE** : `deploy.yml` construit `build:api` sur `main` ; logistique.nexusmarket.sn sert la version
       complète. Suppression du mode démo (PGlite, `src/demo/`, `seed`), de `supabase-js` et du mode
       `supabase` dans `backend.js` ; écran d'accueil sans « Démonstration ». Les fonctions pas encore
       portées affichent « bientôt disponible » au lieu d'une erreur.
+- Reste : migration `0006` à appliquer en ligne ; **bascule laissée à l'utilisateur** : `deploy.yml` déploie à
+      chaque push sur `main`, la passer en `build:api` mettrait la version complète en production — à faire
+      seulement après `npx wrangler d1 migrations apply nexus-logistics --remote` (0003 → 0006) ; règles de paie
+      par type de véhicule (`lg_pay_rules`) remplacées par les réglages de l'entreprise ; paiement des gains
+      (marquer « payé ») → C7 ; message « facture envoyée » → C8.
 
 ## C7 — Pilotage et tâches automatiques
 - [ ] Tour de contrôle : carte des chauffeurs, voyages, alertes (rafraîchissement par interrogation toutes

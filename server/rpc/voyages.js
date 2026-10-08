@@ -7,6 +7,7 @@ import { fail, audit, idempotent, hasRole, text, num, int, uuid, parseJson, dist
 import { normCode } from './preparation.js';
 import { amountDue, orderShort } from './commandes.js';
 import { DOCS_EXPIRED_SQL } from './flotte.js';
+import { tryReconcile } from './caisse.js';
 
 const OPEN = ['planned', 'loading', 'sealed', 'in_progress'];
 const LOADABLE = ['planned', 'loading'];
@@ -538,6 +539,7 @@ export default {
           refreshStatement(ctx, p.trip_id),
         ], 'not_in_transit_to_hub');
         // rapprochement de caisse du voyage : cycle C6
+        await tryReconcile(ctx, p.trip_id);
         return { ok: true, code: p.code, direction: p.direction, zone: p.zone, next: p.direction === 'return' ? 'return_vendor' : 'staged' };
       });
     },

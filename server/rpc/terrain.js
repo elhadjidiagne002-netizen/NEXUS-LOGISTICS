@@ -8,6 +8,8 @@ import { fail, audit, idempotent, hasRole, text, num, int, uuid, parseJson, dist
 import { normCode } from './preparation.js';
 import { tripFor, isTripDriver, refreshStatement, etaStatements, etaOrigin, loadPlan } from './voyages.js';
 import { alertStatement, maintenanceAlert } from './flotte.js';
+import { OUTSTANDING_SQL } from './caisse.js';
+import { issueInvoice } from './factures.js';
 
 // Annexe C — motifs d'échec (mêmes codes que lg_failure_reasons et que l'app chauffeur)
 export const FAILURE_REASONS = {
@@ -40,19 +42,12 @@ async function stopFor(ctx, id) {
 const courierPos = (ctx, courierId, p) => (p.lat == null ? [] : [ctx.db.prepare('UPDATE couriers SET last_lat = ?, last_lng = ?, last_seen_at = ? WHERE id = ? AND company_id = ?')
   .bind(p.lat, p.lng, ctx.now, courierId, ctx.company.id)]);
 
-/** Espèces portées par un chauffeur : encaissées en espèces sur ses voyages pas encore versés en caisse (C6). */
+/** Espèces portées par un chauffeur (lg_courier_cash) : sur ses voyages pas encore versés en caisse. */
 export async function cashInHand(ctx, courierId) {
-  return (await ctx.db.prepare(
-    `SELECT coalesce(sum(cc.amount_collected_fcfa), 0) AS n FROM cod_collections cc JOIN trip_stops s ON s.id = cc.stop_id JOIN trips t ON t.id = s.trip_id
-      WHERE t.company_id = ? AND t.courier_id = ? AND cc.method = 'cash' AND t.status IN ('sealed', 'in_progress', 'completed')`,
-  ).bind(ctx.company.id, courierId).first('n')) - (await cashDropped(ctx, courierId));
-}
-// versements intermédiaires (caisse, cycle C6) : la table n'existe qu'à partir de la migration 0006
-async function cashDropped(ctx, courierId) {
-  try {
-    return await ctx.db.prepare(`SELECT coalesce(sum(d.amount_fcfa), 0) AS n FROM cash_drops d JOIN trips t ON t.id = d.trip_id
-       WHERE t.company_id = ? AND t.courier_id = ? AND t.status IN ('sealed', 'in_progress', 'completed')`).bind(ctx.company.id, courierId).first('n');
-  } catch { return 0; }
+  return ctx.db.prepare(
+    `SELECT coalesce(sum(${OUTSTANDING_SQL}), 0) AS n FROM trips t WHERE t.company_id = ? AND t.courier_id = ? AND t.status IN ('sealed', 'in_progress', 'completed')
+       AND NOT EXISTS (SELECT 1 FROM cash_remittances r WHERE r.trip_id = t.id)`,
+  ).bind(ctx.company.id, courierId).first('n');
 }
 
 /**
@@ -76,15 +71,14 @@ export async function advanceTrip(ctx, tripId) {
 /** Bilan d'un voyage (lg_trip_summary). */
 export async function tripSummary(ctx, tripId) {
   const t = await tripFor(ctx, tripId);
-  const [st, pk, cc] = await ctx.db.batch([
+  const [st, pk, cc, dr] = await ctx.db.batch([
     ctx.db.prepare('SELECT status FROM trip_stops WHERE trip_id = ? AND company_id = ?').bind(t.id, ctx.company.id),
     ctx.db.prepare('SELECT p.code, p.status, p.holder_type, tp.outcome, tp.loaded_at FROM trip_packages tp JOIN packages p ON p.id = tp.package_id WHERE tp.trip_id = ? AND tp.company_id = ?').bind(t.id, ctx.company.id),
     ctx.db.prepare('SELECT cc.method, cc.amount_collected_fcfa AS a FROM cod_collections cc JOIN trip_stops s ON s.id = cc.stop_id WHERE s.trip_id = ? AND cc.company_id = ?').bind(t.id, ctx.company.id),
+    ctx.db.prepare(`SELECT (SELECT coalesce(sum(amount_fcfa), 0) FROM cash_drops WHERE trip_id = ?1 AND company_id = ?2) AS dropped,
+        EXISTS (SELECT 1 FROM cash_remittances WHERE trip_id = ?1 AND company_id = ?2) AS remitted`).bind(t.id, ctx.company.id),
   ]);
-  let dropped = 0;
-  try { dropped = await ctx.db.prepare('SELECT coalesce(sum(amount_fcfa), 0) AS n FROM cash_drops WHERE trip_id = ? AND company_id = ?').bind(t.id, ctx.company.id).first('n'); } catch { /* C6 */ }
-  let remitted = false;
-  try { remitted = Boolean(await ctx.db.prepare('SELECT 1 AS x FROM cash_remittances WHERE trip_id = ? AND company_id = ?').bind(t.id, ctx.company.id).first()); } catch { /* C6 */ }
+  const dropped = dr.results[0].dropped; const remitted = Boolean(dr.results[0].remitted);
   const cash = cc.results.filter((x) => x.method === 'cash').reduce((s, x) => s + x.a, 0);
   return {
     number: t.number, status: t.status,
@@ -115,7 +109,7 @@ export default {
     async handler(ctx) {
       if (!ctx.courierId) fail('not_a_courier', 403);
       const cid = ctx.company.id; const since = new Date(Date.parse(ctx.now) - 7 * 86400000).toISOString();
-      const [c, trips, stops, pk, week] = await ctx.db.batch([
+      const [c, trips, stops, pk, week, earn] = await ctx.db.batch([
         ctx.db.prepare('SELECT id, name, rating_avg, deliveries_done, cash_limit_fcfa FROM couriers WHERE id = ? AND company_id = ?').bind(ctx.courierId, cid),
         ctx.db.prepare(
           `SELECT t.*, v.plate, v.kind AS vkind FROM trips t JOIN vehicles v ON v.id = t.vehicle_id
@@ -135,6 +129,8 @@ export default {
                   sum(s.status = 'delivered' AND s.completed_at <= coalesce(s.window_end, datetime(s.eta, '+30 minutes'))) AS on_time
              FROM trip_stops s JOIN trips t ON t.id = s.trip_id WHERE t.company_id = ? AND s.kind = 'delivery' AND s.completed_at > ? GROUP BY t.courier_id`,
         ).bind(cid, since),
+        ctx.db.prepare(`SELECT coalesce(sum(CASE WHEN status = 'pending' THEN amount_fcfa END), 0) AS pending,
+            coalesce(sum(CASE WHEN created_at > ? THEN amount_fcfa END), 0) AS week FROM courier_earnings WHERE company_id = ? AND courier_id = ?`).bind(since, cid, ctx.courierId),
       ]);
       const me = c.results[0];
       const limit = me.cash_limit_fcfa ?? Number(ctx.company.config.cash_limit_fcfa ?? 150000);
@@ -147,10 +143,10 @@ export default {
       return {
         courier: { id: me.id, name: me.name, rating: me.rating_avg, deliveries_done: me.deliveries_done, cash_limit_fcfa: limit },
         cash_in_hand_fcfa: await cashInHand(ctx, ctx.courierId),
-        earnings_pending_fcfa: 0, // gains du chauffeur : cycle C6
+        earnings_pending_fcfa: earn.results[0].pending,
         week: { delivered: mine?.delivered ?? 0, failed: mine?.failed ?? 0, on_time_pct: mine?.delivered ? Math.round((100 * mine.on_time) / mine.delivered) : null,
           first_attempt_pct: mine && mine.delivered + mine.failed ? Math.round((100 * mine.delivered) / (mine.delivered + mine.failed)) : null,
-          rating: me.rating_avg, score: score(mine), rank: (ranked.findIndex((r) => r.id === ctx.courierId) + 1) || null, of: ranked.length },
+          rating: me.rating_avg, earnings: earn.results[0].week, score: score(mine), rank: (ranked.findIndex((r) => r.id === ctx.courierId) + 1) || null, of: ranked.length },
         trips: trips.results.map((t) => {
           const ts = stops.results.filter((s) => s.trip_id === t.id);
           const plan = loadPlan(ts, pkgs.filter((p) => ts.some((s) => s.id === p.stop_id)), t.vkind);
@@ -358,13 +354,17 @@ export default {
         ).bind(cid, o.phone_key, p.lat, p.lng, s.landmark ?? o.landmark, o.delivery_zone, ctx.now));
         if (far) stmts.push(alertStatement(ctx, cid, 'far_delivery', 'warning', `Arrêt ${s.seq} du voyage ${t.number} validé à ${dist} m de l'adresse`, { trip: t.id, stop: s.id, dedupe: `far:${s.id}` }));
         await runBatch(ctx, stmts, 'stop_closed');
-        // facture : cycle C6 ; message « livré » au client : cycle C8
+        // facture à la livraison (jamais bloquante) ; message « livré » au client : cycle C8
+        let invoice = null;
+        if ((await ctx.db.prepare('SELECT status FROM orders WHERE id = ? AND company_id = ?').bind(s.order_id, cid).first('status')) === 'delivered') {
+          try { invoice = (await issueInvoice(ctx, s.order_id)).number ?? null; } catch (e) { await audit(ctx, 'invoice_failed', 'order', s.order_id, { error: String(e?.message ?? e) }); }
+        }
         const inHand = await cashInHand(ctx, t.courier_id);
         const limit = (await ctx.db.prepare('SELECT cash_limit_fcfa FROM couriers WHERE id = ?').bind(t.courier_id).first('cash_limit_fcfa')) ?? Number(cfg.cash_limit_fcfa ?? 150000);
         if (inHand > limit) await alertStatement(ctx, cid, 'cash_limit', 'critical', `Le chauffeur du voyage ${t.number} porte ${inHand} F (plafond ${limit} F)`,
           { trip: t.id, dedupe: `cash_limit:${t.id}` }).run();
         const next = await advanceTrip(ctx, t.id);
-        return { ok: true, far, distance_m: dist, cash_in_hand_fcfa: inHand, must_remit: inHand > limit, invoice: null, next_stop: next };
+        return { ok: true, far, distance_m: dist, cash_in_hand_fcfa: inHand, must_remit: inHand > limit, invoice, next_stop: next };
       });
     },
   },

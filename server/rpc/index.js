@@ -24,9 +24,11 @@ import flotte from './flotte.js';
 import voyages from './voyages.js';
 import terrain from './terrain.js';
 import retours from './retours.js';
+import caisse from './caisse.js';
+import factures from './factures.js';
 
 export const REGISTRY = { ...socle, ...tarifs, ...commandes, ...suivi, ...preparation, ...entrepot, ...flotte, ...voyages,
-  ...terrain, ...retours };
+  ...terrain, ...retours, ...caisse, ...factures };
 
 
 export async function buildContext(request, env) {

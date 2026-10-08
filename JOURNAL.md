@@ -2,6 +2,21 @@
 
 Le plus récent en premier.
 
+## 08/10/2026 — Cycle C6 (Cloudflare) : caisse, factures, avoirs, relevés, incidents
+- **Fait** : `migrations/0006_caisse.sql` (versements, versements intermédiaires, gains des chauffeurs, factures et
+  lignes) ; modules `server/rpc/caisse.js` (caisse, rapprochement, gains, incidents) et `factures.js` (facture à la
+  livraison, avoirs, montant en lettres, export comptable, relevés vendeurs) ; page de suivi : facture imprimable et
+  réponse du client à une proposition d'indemnité ; réglages NINEA / RC / adresse / commission dans l'administration ;
+  en-tête de facture au nom de l'entreprise. `test/helpers/scenario.js` partagé par les tests C5 et C6.
+- **Choix** : numéros FAC-/AV- par entreprise et par année incrémentés dans le même lot D1 que la facture (lot annulé
+  = aucun numéro perdu) ; « pas plus que facturé » contrôlé par `guard()` dans le lot ; rapprochement par passage
+  conditionnel `completed → reconciled`, donc gains crédités une seule fois même en cas de double appel.
+- **Pas fait (volontairement)** : la bascule de `deploy.yml` vers `build:api` — elle déploierait la version complète
+  en production au prochain push, avant que les migrations 0003 à 0006 soient appliquées en ligne.
+- **État** : 56 tests serveur, 12 unitaires, builds OK ; caisse (comptage, reçu, rapprochement), factures et gains
+  vérifiés dans Chromium.
+- **À appliquer en ligne** : `npx wrangler d1 migrations apply nexus-logistics --remote` → `0006_caisse.sql`.
+
 ## 08/10/2026 — Cycle C5 (Cloudflare) : livraison sur le terrain et retours
 - **Fait** : `migrations/0005_terrain.sql` (codes de livraison, preuves, encaissements, adresses vérifiées, positions,
   dépenses, demandes de retour, causes et frais de retour, contrôles de retour, fichiers) ; modules

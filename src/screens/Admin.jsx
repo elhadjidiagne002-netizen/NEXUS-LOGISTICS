@@ -240,7 +240,9 @@ const CFG = [['max_attempts', 'Présentations avant retour vendeur'], ['proof_ra
   ['bonus_on_time', 'Prime par livraison à l\'heure (F)'], ['double_check_fcfa', 'Double contrôle au-delà de (F)'],
   ['tracking_base_url', 'Adresse de la page de suivi'], ['expiry_alert_days', 'Alerte péremption (jours avant la date)'],
   ['insurance_rate_pct', 'Assurance : prime (% de la valeur déclarée)'], ['insurance_min_fcfa', 'Assurance : prime minimale (F)'],
-  ['insurance_max_value_fcfa', 'Assurance : valeur maximale assurable (F)'], ['uninsured_cap_fcfa', 'Plafond d\'indemnisation sans assurance (F)']];
+  ['insurance_max_value_fcfa', 'Assurance : valeur maximale assurable (F)'], ['uninsured_cap_fcfa', 'Plafond d\'indemnisation sans assurance (F)'],
+  ['pay_fixed_trip', 'Fixe par voyage pour le chauffeur (F)'], ['commission_pct', 'Commission sur les produits des vendeurs (%)'],
+  ['company_ninea', 'NINEA (factures)'], ['company_rc', 'Registre du commerce (factures)'], ['company_address', 'Adresse (factures)']];
 function Config() {
   const { data } = useRpc('lg_pricing', {});
   const [f, setF] = useState(null);
@@ -248,8 +250,10 @@ function Config() {
   const cur = f ?? data?.config ?? {};
   return <Card><div className="grid cols-2">{CFG.map(([k, l]) => <Field key={k} label={l}><input className="input" value={cur[k] ?? ''} placeholder="valeur par défaut"
     onChange={(e) => setF({ ...cur, [k]: e.target.value })} /></Field>)}
-    <Field label="Émetteur de la facture client"><select className="input" value={cur.invoice_issuer ?? 'vendor_via_nexus'} onChange={(e) => setF({ ...cur, invoice_issuer: e.target.value })}>
-      <option value="vendor_via_nexus">Le vendeur, par l'intermédiaire de NEXUS</option><option value="nexus">NEXUS Market en son nom</option></select></Field>
+    {MODE === 'api' ? <Field label="Émetteur de la facture client"><select className="input" value={cur.invoice_issuer ?? 'company'} onChange={(e) => setF({ ...cur, invoice_issuer: e.target.value })}>
+      <option value="company">L'entreprise, en son nom</option><option value="vendor">Le vendeur (facture émise pour son compte)</option></select></Field>
+    : <Field label="Émetteur de la facture client"><select className="input" value={cur.invoice_issuer ?? 'vendor_via_nexus'} onChange={(e) => setF({ ...cur, invoice_issuer: e.target.value })}>
+      <option value="vendor_via_nexus">Le vendeur, par l'intermédiaire de NEXUS</option><option value="nexus">NEXUS Market en son nom</option></select></Field>}
     <label className="check"><input type="checkbox" checked={cur.require_photo !== false && cur.require_photo !== 'false'} onChange={(e) => setF({ ...cur, require_photo: e.target.checked })} /> Photo obligatoire à la livraison et à l'échec</label>
     {MODE === 'api' && <label className="check"><input type="checkbox" checked={cur.prep_at_vendor === true || cur.prep_at_vendor === 'true'} onChange={(e) => setF({ ...cur, prep_at_vendor: e.target.checked })} /> Les commandes d'un vendeur se préparent chez lui (sinon au dépôt)</label>}</div>
     <PeakDays value={Array.isArray(cur.peak_days) ? cur.peak_days : []} onChange={(peak_days) => setF({ ...cur, peak_days })} />

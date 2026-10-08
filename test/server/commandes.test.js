@@ -355,7 +355,7 @@ test('rôles : chaque fonction C2 refuse les membres sans le rôle voulu ; les f
   const driver = await invite(env, a, 'moussa@express.sn', { role: 'courier', name: 'Moussa' });
   const picker = await invite(env, a, 'fatou@express.sn', { staff: ['picker'], name: 'Fatou' });
   const publicFns = Object.entries(REGISTRY).filter(([, d]) => d.roles === 'public').map(([n]) => n).sort();
-  assert.deepEqual(publicFns, ['lg_quote', 'lg_slots_available', 'lg_track', 'lg_track_book_slot', 'lg_track_confirm', 'lg_track_rate', 'lg_track_request',
+  assert.deepEqual(publicFns, ['lg_quote', 'lg_slots_available', 'lg_track', 'lg_track_book_slot', 'lg_track_confirm', 'lg_track_incident_answer', 'lg_track_incidents', 'lg_track_invoice', 'lg_track_rate', 'lg_track_request',
     'lg_track_set_location', 'lg_track_third_party']);
   for (const fn of ['lg_order_create', 'lg_order_import', 'lg_orders_list', 'lg_order_detail', 'lg_cod_pending', 'lg_confirm_cod', 'lg_cancel_unconfirmed',
     'lg_order_insure', 'lg_ban_number', 'lg_requests_list', 'lg_request_done', 'lg_pricing', 'lg_surcharges_list', 'lg_surcharge_declare',

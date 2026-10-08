@@ -20,7 +20,11 @@ export const CONFIG_DEFAULTS = {
   bonus_zero_failure: 1000,
   bonus_on_time: 0,
   double_check_fcfa: 100000,  // valeur de commande au-delà de laquelle un second contrôle est exigé
-  invoice_issuer: 'company',  // la facture est émise au nom de l'entreprise de livraison
+  invoice_issuer: 'company',  // la facture est émise au nom de l'entreprise de livraison ('vendor' : au nom du vendeur)
+  company_ninea: null,        // mentions légales des factures
+  company_rc: null,
+  company_address: null,
+  commission_pct: 0,          // commission retenue sur les produits des vendeurs (relevé de reversement)
   manager_phone: null,
   manager_email: null,
   peak_days: [],

@@ -6,6 +6,8 @@ import { fail, audit, idempotent, text, int, uuid, guard, runBatch, plusMinutes 
 import { normCode } from './preparation.js';
 import { tripFor, refreshStatement } from './voyages.js';
 import { UNRETURNED_SQL, FAILURE_REASONS } from './terrain.js';
+import { tryReconcile } from './caisse.js';
+import { creditPackage } from './factures.js';
 
 // Causes de retour par défaut (cycle 8, « à valider ») : une ligne n'est écrite que si l'entreprise les modifie.
 export const DEFAULT_CAUSES = [
@@ -53,8 +55,8 @@ async function returnToVendor(ctx, p, reason, extra = []) {
     ctx.db.prepare(`UPDATE orders SET status = 'cancelled', cancelled_at = ?, cancel_reason = ?, updated_at = ? WHERE id = ? AND company_id = ? AND status <> 'delivered'
         AND NOT EXISTS (SELECT 1 FROM packages WHERE order_id = ? AND status NOT IN ('returned_vendor', 'cancelled', 'lost'))`).bind(ctx.now, reason, ctx.now, p.order_id, cid, p.order_id),
   ], 'bad_status');
-  // avoir sur la facture : cycle C6
   await audit(ctx, 'return_vendor', 'package', p.code, { reason });
+  return creditPackage(ctx, p.id, reason);   // avoir sur la facture (retour d'un client livré)
 }
 
 async function packageByCode(ctx, code) {
@@ -91,7 +93,7 @@ export default {
         if (tp?.trip_id && !(await ctx.db.prepare(UNRETURNED_SQL).bind(tp.trip_id, cid).first())) {
           await ctx.db.prepare('UPDATE alerts SET acked_at = ?, dedupe_key = NULL WHERE company_id = ? AND dedupe_key = ? AND acked_at IS NULL').bind(ctx.now, cid, `unreturned:${tp.trip_id}`).run();
         }
-        // rapprochement de caisse du voyage : cycle C6
+        if (tp?.trip_id) await tryReconcile(ctx, tp.trip_id);
         return { ok: true, code: p.code, attempts: p.attempts, can_retry: p.attempts < Number(ctx.company.config.max_attempts ?? 2),
           to_vendor: Boolean(tp?.failure_reason && FAILURE_REASONS[tp.failure_reason]?.vendor) };
       });
@@ -105,8 +107,8 @@ export default {
         const p = await packageByCode(ctx, a.p_code);
         if (!p) return { ok: false, error: 'unknown_package' };
         if (p.status !== 'returned_hub') return { ok: false, error: 'bad_status', status: p.status };
-        await returnToVendor(ctx, p, text(a.p_reason, 200) ?? 'Retour au vendeur');
-        return { ok: true, credit_note: null };
+        const credit = await returnToVendor(ctx, p, text(a.p_reason, 200) ?? 'Retour au vendeur');
+        return { ok: true, credit_note: credit };
       });
     },
   },
@@ -215,8 +217,8 @@ export default {
         const inspection = ctx.db.prepare('INSERT INTO return_inspections (id, company_id, package_id, condition, decision, note, photo_path, inspected_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
           .bind(uuid(), cid, p.id, a.p_condition, a.p_decision, note, photo, ctx.user.id);
         if (a.p_decision === 'vendor') {
-          await returnToVendor(ctx, p, note ?? `Retour client contrôlé : ${a.p_condition}`, [inspection]);
-          return { ok: true, decision: 'vendor', credit_note: null };
+          const credit = await returnToVendor(ctx, p, note ?? `Retour client contrôlé : ${a.p_condition}`, [inspection]);
+          return { ok: true, decision: 'vendor', credit_note: credit };
         }
         const stmts = [
           guard(ctx.db, "(SELECT status FROM packages WHERE id = ?) = 'returned_hub'", [p.id]),
@@ -246,8 +248,9 @@ export default {
           );
         }
         await runBatch(ctx, stmts, 'bad_status');
-        // remboursement du client par avoir : cycle C6
-        return { ok: true, decision: a.p_decision, credit_note: null };
+        // remboursement du client par avoir
+        const credit = await creditPackage(ctx, p.id, a.p_decision === 'scrap' ? 'Retour mis au rebut' : 'Retour remis en vente');
+        return { ok: true, decision: a.p_decision, credit_note: credit };
       });
     },
   },
