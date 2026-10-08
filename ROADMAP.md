@@ -164,8 +164,14 @@ l'aperçu (`logistics-full`), migrations D1 appliquées en ligne, déploiement d
       `lg-fallback.js` — étapes détaillées au § 5 de `docs/integration-boutiques.md`.
 - Reste : migration `0010` à appliquer en ligne ; créer l'entreprise « NEXUS Market », sa clé et son adresse de rappel.
 
-## C11 — Fonctions avancées restantes et nettoyage
-- [ ] Ce qui reste des cycles 6 à 22 de la version Postgres (incidents et assurance, engagement de délai des
-      vendeurs, retours et causes, coûts…), s'il n'a pas été porté avant.
-- [ ] Suppression de l'archive Postgres (`supabase/`, `test/sql/`, `nexus-logistics-mvp.sql`) une fois tout
-      porté ; mise à jour du README.
+## C11 — Fonctions avancées restantes et nettoyage ✅ portage (08/10/2026)
+- [x] Ce qui restait des cycles 6 à 22 : engagement de délai des vendeurs (`lg_my_commitment`,
+      `lg_vendor_commitment_set`, `lg_vendor_commitments_list`, heure limite des préparations, relances par la tâche
+      planifiée « reminders »). Incidents et assurance, retours et causes, coûts, renforts : portés aux C5 à C7.
+      Toutes les fonctions appelées par l'interface existent désormais en mode `api` ; les fonctions Postgres non
+      portées sont des aides internes réécrites en JavaScript, ou `lg_upsert_pay_rule` / `lg_issue_invoice_manual`
+      (sans écran : paie réglée par l'entreprise, facture émise à la livraison). 2 tests serveur.
+- [ ] Suppression de l'archive Postgres (`supabase/`, `test/sql/`, `nexus-logistics-mvp.sql`) et mise à jour du
+      README : **après la bascule** (C6) — le mode démo et `npm run build` en dépendent encore.
+- Reste : migration `0011` à appliquer en ligne ; bascule (voir C6) puis nettoyage.
+

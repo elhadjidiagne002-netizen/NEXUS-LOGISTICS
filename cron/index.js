@@ -4,7 +4,7 @@
 export default {
   async scheduled(event, env, ctx) {
     const at = new Date(event.scheduledTime); const first = at.getUTCMinutes() < 5;
-    const tasks = ['watchdog', 'messages', ...(first ? ['purge'] : []), ...(first && at.getUTCHours() === 19 ? ['evening'] : [])];
+    const tasks = ['watchdog', 'reminders', 'messages', ...(first ? ['purge'] : []), ...(first && at.getUTCHours() === 19 ? ['evening'] : [])];
     for (const task of tasks) {
       ctx.waitUntil(fetch(`${env.API_URL}/api/cron/${task}`, { method: 'POST', headers: { 'x-cron-secret': env.CRON_SECRET } })
         .then(async (r) => { if (!r.ok) console.error('cron', task, r.status, await r.text()); })

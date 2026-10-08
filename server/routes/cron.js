@@ -5,6 +5,7 @@
 import { HttpError, json } from '../http.js';
 import { sendPending, render, DEFAULT_TEMPLATES } from '../rpc/messages.js';
 import { sendWebhooks } from '../rpc/webhooks.js';
+import { vendorReminders } from '../rpc/engagements.js';
 
 const cfg = (key, def) => `coalesce(json_extract(co.settings, '$.${key}'), ${def})`;
 const minutesSince = (col) => `((julianday(?1) - julianday(${col})) * 1440)`;
@@ -95,7 +96,7 @@ export async function eveningReport(env, now) {
 }
 
 const TASKS = { watchdog: watchdogStatements, purge: purgeStatements };
-const JOBS = { messages: async (env, now) => ({ ...(await sendPending(env, now)), ...(await sendWebhooks(env, now)) }), evening: eveningReport };
+const JOBS = { messages: async (env, now) => ({ ...(await sendPending(env, now)), ...(await sendWebhooks(env, now)) }), evening: eveningReport, reminders: vendorReminders };
 
 function sameSecret(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length || a.length < 16) return false;

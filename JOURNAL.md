@@ -2,6 +2,16 @@
 
 Le plus récent en premier.
 
+## 08/10/2026 — Cycle C11 (Cloudflare) : engagements des vendeurs, fin du portage
+- **Fait** : `migrations/0011_engagements.sql` ; `server/rpc/engagements.js` (engagement de délai, suivi, relances
+  « bientôt » / « en retard » par la tâche planifiée « reminders ») ; heure limite d'une préparation = commande + délai
+  du vendeur, sans dépasser l'heure promise − 3 h. Toutes les fonctions appelées par l'interface sont portées.
+- **Mesuré** : `npx wrangler check startup --pages` : démarrage du Worker de l'ordre de quelques ms (aucune
+  dépendance npm dans `server/`).
+- **Pas fait (volontairement)** : suppression de l'archive Postgres et du mode démo — attendent la bascule.
+- **État** : 79 tests serveur, 12 unitaires, builds OK.
+- **À appliquer en ligne** : migration `0011_engagements.sql`.
+
 ## 08/10/2026 — Cycle C10 (Cloudflare) : intégration des boutiques en ligne
 - **Fait** : `migrations/0010_integration.sql` (adresse de rappel, événements à envoyer) ; `server/rpc/webhooks.js`
   (événements signés HMAC-SHA256, envoi avec reprises) ; `GET /api/v1/orders/<référence>` ; événements créés à la

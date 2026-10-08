@@ -38,19 +38,25 @@ export function releaseStatements(ctx, order) {
   // réglage prep_at_vendor : la commande d'un vendeur membre se prépare chez lui (tâche sans lieu)
   // départ limite : 3 h avant l'heure promise, sinon 24 h après la commande
   const base = order.created_at && order.created_at > ctx.now ? order.created_at : ctx.now;
-  const cutoff = order.promised_at ? plusMinutes(order.promised_at, -180) : plusMinutes(base, 24 * 60);
+  // engagement de délai du vendeur (C11) : heure limite = commande + N heures (sans dépasser l'heure promise − 3 h)
+  const promised = order.promised_at ? plusMinutes(order.promised_at, -180) : null;
+  const dflt = plusMinutes(base, 24 * 60);
   return [
     db.prepare(
       `INSERT INTO pick_tasks (id, company_id, order_id, hub_id, vendor_id, cutoff_at, created_at)
-       SELECT ?, o.company_id, o.id,
+       SELECT ?4, o.company_id, o.id,
               CASE WHEN json_extract(c.settings, '$.prep_at_vendor') = 1 AND o.vendor_id IS NOT NULL THEN NULL ELSE o.hub_id END,
-              o.vendor_id, ?, ? FROM orders o JOIN companies c ON c.id = o.company_id
-        WHERE o.id = ? AND o.company_id = ? AND o.status <> 'cancelled'
+              o.vendor_id,
+              coalesce((SELECT CASE WHEN ?1 IS NULL THEN x.d WHEN x.d < ?1 THEN x.d ELSE ?1 END
+                          FROM (SELECT strftime('%Y-%m-%dT%H:%M:%fZ', ?2, '+' || vc.prep_hours || ' hours') AS d FROM vendor_commitments vc
+                                 WHERE vc.company_id = o.company_id AND vc.vendor_id = o.vendor_id) x), ?1, ?3),
+              ?5 FROM orders o JOIN companies c ON c.id = o.company_id
+        WHERE o.id = ?6 AND o.company_id = ?7 AND o.status <> 'cancelled'
           AND (o.payment_status = 'paid' OR (o.payment_method = 'cod' AND o.cod_confirmed_at IS NOT NULL))
           AND NOT EXISTS (SELECT 1 FROM pick_tasks t WHERE t.order_id = o.id AND t.status <> 'cancelled')
           AND EXISTS (SELECT 1 FROM order_items oi LEFT JOIN products p ON p.id = oi.product_id
                        WHERE oi.order_id = o.id AND oi.line_status <> 'cancelled' AND coalesce(p.is_shippable, 1) = 1)`,
-    ).bind(taskId, cutoff, ctx.now, order.id, cid),
+    ).bind(promised, base, dflt, taskId, ctx.now, order.id, cid),
     db.prepare(
       `INSERT INTO pick_lines (id, company_id, task_id, order_item_id, product_id, qty_ordered)
        SELECT lower(hex(randomblob(16))), oi.company_id, ?, oi.id, oi.product_id, oi.quantity
