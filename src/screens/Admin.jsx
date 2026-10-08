@@ -48,7 +48,8 @@ function Fleet() {
     <div className="row"><Btn kind="primary" onClick={() => setEdit({ kind: 'moto', capacity_kg: 40, equipment: [], ownership: 'interne' })}>＋ Véhicule</Btn></div>
     <div className="grid cols-2">{(data ?? []).map((v) => {
       const expired = v.documents.some((d) => d.expired); const soon = v.documents.some((d) => d.soon);
-      return <Card key={v.id} kind={expired || v.status === 'maintenance' ? 'bad' : soon ? 'todo' : 'ok'}>
+      const m = v.maintenance;
+      return <Card key={v.id} kind={expired || v.status === 'maintenance' || m?.state === 'overdue' ? 'bad' : soon || m?.state === 'soon' ? 'todo' : 'ok'}>
         <div className="row between"><h3 style={{ margin: 0 }}>{v.kind} · <span className="mono">{v.plate}</span></h3><StatusBadge s={v.on_trip ? 'on_trip' : v.status} /></div>
         <div className="small">{v.label} · {v.capacity_kg} kg{v.capacity_l ? ` · ${v.capacity_l} L` : ''}{v.max_packages ? ` · ${v.max_packages} colis` : ''} · {v.ownership}
           {v.equipment.length ? ` · ${v.equipment.join(', ')}` : ''}</div>
@@ -56,6 +57,10 @@ function Fleet() {
           · coûts 30 j {formatF(v.costs_30d_fcfa)}{v.km_30d ? ` · ${v.km_30d} km` : ''}{v.costs_30d_fcfa && v.km_30d ? ` · ${formatF(v.costs_30d_fcfa / v.km_30d)}/km` : ''}</div>
         <div className="chips" style={{ margin: '6px 0' }}>{v.documents.map((d) => <Badge key={d.id} kind={d.expired ? 'bad' : d.soon ? 'todo' : 'ok'}>{d.kind.replace('_', ' ')} · {dmy(d.expires_at)}</Badge>)}
           {v.documents.length === 0 && <Badge kind="todo">aucun document</Badge>}</div>
+        {m && <div style={{ margin: '4px 0' }}><Badge kind={m.state === 'overdue' ? 'bad' : m.state === 'soon' ? 'todo' : 'ok'}>
+          <Icon name="wrench" size={12} /> {m.kind} {m.state === 'overdue' ? `dépassé de ${(-m.remaining_km).toLocaleString('fr-FR')} km`
+            : m.state === 'unknown' ? `à ${m.due_km.toLocaleString('fr-FR')} km (compteur inconnu)` : `dans ${m.remaining_km.toLocaleString('fr-FR')} km`}</Badge>
+          {m.km != null && <span className="small muted"> · ≈ {m.km.toLocaleString('fr-FR')} km estimés</span>}</div>}
         {v.last_check && <div className="small muted">Dernier contrôle : {dmy(v.last_check.at)} {v.last_check.ok ? '✔' : '✖ non conforme'}</div>}
         <div className="row"><Btn size="sm" onClick={() => setEdit(v)}>Modifier</Btn><Btn size="sm" onClick={() => setDoc(v)}>＋ Document</Btn><Btn size="sm" onClick={() => setMaint(v)}>Entretien</Btn>
           {!v.on_trip && <Btn size="sm" kind="ghost" onClick={() => run(async () => { await rpc('lg_set_vehicle_status', { p_vehicle: v.id, p_status: v.status === 'maintenance' ? 'available' : 'maintenance' }); reload(); })}>
@@ -193,7 +198,7 @@ function ZoneRow({ z, reload }) {
 const CFG = [['max_attempts', 'Présentations avant retour vendeur'], ['proof_radius_m', 'Rayon de validation (m)'], ['cash_limit_fcfa', 'Plafond d\'espèces par chauffeur (F)'],
   ['pick_lock_minutes', 'Libération d\'une préparation inactive (min)'], ['tva_rate', 'Taux de TVA (%)'], ['heavy_kg', 'Seuil « lourd » (kg)'],
   ['otp_attempts', 'Essais du code client'], ['staged_max_hours', 'Alerte colis à quai (h)'], ['stop_max_minutes', 'Alerte arrêt long (min)'],
-  ['pay_per_package', 'Prime par colis livré (F)'], ['bonus_zero_failure', 'Bonus zéro échec (F)'], ['manager_phone', 'WhatsApp du gérant (rapport du soir)'], ['manager_email', 'E-mail du gérant (secours du rapport du soir)'],
+  ['pay_per_package', 'Prime par colis livré (F)'], ['bonus_zero_failure', 'Bonus zéro échec (F)'], ['manager_phone', 'WhatsApp du gérant (rapport du soir)'], ['manager_email', 'E-mail du gérant (secours du rapport du soir)'], ['maintenance_alert_km', 'Alerte entretien (km avant l\'échéance)'],
   ['bonus_on_time', 'Prime par livraison à l\'heure (F)'], ['double_check_fcfa', 'Double contrôle au-delà de (F)'],
   ['tracking_base_url', 'Adresse de la page de suivi'], ['expiry_alert_days', 'Alerte péremption (jours avant la date)'],
   ['insurance_rate_pct', 'Assurance : prime (% de la valeur déclarée)'], ['insurance_min_fcfa', 'Assurance : prime minimale (F)'],

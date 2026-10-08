@@ -2,6 +2,16 @@
 
 Le plus récent en premier.
 
+## 08/10/2026 — Cycle 19 : entretien préventif au kilométrage + indicateur « colis par heure »
+- **Défaut** : le carnet enregistrait « prochain entretien à N km » (`next_due_km`) sans que personne ne soit
+  jamais prévenu. Désormais : **kilométrage estimé** (`lg_vehicle_km_estimate` = dernier relevé + km des
+  voyages partis depuis), **échéance** (`lg_vehicle_maintenance` : bientôt sous `maintenance_alert_km`,
+  500 km par défaut, ou dépassée) et **alerte dans la tour de contrôle** (`maintenance_due`, une par état),
+  posée à la clôture d'un voyage et à chaque relevé (déclencheurs non bloquants). Badge dans la Flotte.
+- **Défaut** : `lg_kpis` donnait « 934 colis par heure » quand les tournées avaient duré quelques secondes
+  (démo) ; plus de cadence sous 30 min de tournée cumulée.
+- Démo : vidange de la moto due dans 250 km (alerte visible). Tests : 95/95.
+
 ## 08/10/2026 — Cycle 18 : canal de secours e-mail via Brevo (module 06, P2)
 - **Envoi fait par NEXUS Market** (dépôt `nexus-market`, même branche) : `functions/api/_lib/lg-fallback.js`,
   appelé par `/cron/notify-retry` pour les événements `lg_*`. **WhatsApp d'abord** avec le texte final

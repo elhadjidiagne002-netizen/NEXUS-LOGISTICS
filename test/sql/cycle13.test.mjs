@@ -21,10 +21,12 @@ test('totaux : dépenses non rejetées + entretien + paie ; coût par présentat
   const c = await t.rpc(U.accountant, 'lg_costs', { p_from: today, p_to: today });
   const pay = Number((await t.one("select coalesce(sum(amount), 0) s from courier_earnings where type in ('delivery', 'bonus')")).s);
   const exp = Number((await t.one("select coalesce(sum(amount_fcfa), 0) s from lg_trip_expenses where status <> 'rejected'")).s);
+  const maint = Number((await t.one('select coalesce(sum(cost_fcfa), 0) s from lg_vehicle_logs')).s);
   const k = c.totals;
   assert.ok(exp >= 5000 + 6000, 'notre carburant + le plein de la démo');
-  assert.deepEqual([k.expenses_fcfa, k.maintenance_fcfa, k.driver_pay_fcfa], [exp, 3000, pay], 'la dépense rejetée (700) ne compte pas');
-  assert.equal(k.cost_fcfa, exp + 3000 + pay);
+  assert.ok(maint >= 3000, 'notre vidange (+ celle de la moto de la démo)');
+  assert.deepEqual([k.expenses_fcfa, k.maintenance_fcfa, k.driver_pay_fcfa], [exp, maint, pay], 'la dépense rejetée (700) ne compte pas');
+  assert.equal(k.cost_fcfa, exp + maint + pay);
   assert.equal(k.cost_per_presentation_fcfa, Math.round(k.cost_fcfa / k.presentations));
   assert.equal(k.failure_cost_fcfa, Math.round(k.cost_fcfa * k.failed / k.presentations));
   assert.equal(k.margin_fcfa, k.revenue_fcfa - k.cost_fcfa);

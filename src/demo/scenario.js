@@ -165,5 +165,9 @@ export async function runScenario(rpc, query) {
     ['RIZ-5', 'A-01-1', 10, 'RZ-1102', 120]]) {
     await rpc('lg_put_away', { p_product_code: code, p_location_code: loc, p_qty: qty, p_event: ev(), p_lot: lot, p_expires_on: inDays(d) }, P.dock);
   }
+  // 11. carnet d'entretien (cycle 19) : vidange de la moto due dans 250 km → alerte dans la tour de contrôle
+  const motoKm = (await query('select public.lg_vehicle_km_estimate($1) k', [MOTO])).rows[0].k ?? 18000;
+  await rpc('lg_log_maintenance', { p_vehicle: MOTO, p_kind: 'vidange', p_odometer_km: motoKm, p_cost_fcfa: 8000,
+    p_note: 'Vidange et chaîne', p_next_due_km: motoKm + 250 }, P.dock);
   return { orders: ids, trips: [tripA, tripB] };
 }

@@ -7,7 +7,7 @@ import { MapView } from '../components/field.jsx';
 
 const STOP_COLOR = { delivered: '#14833b', failed: '#c62828', pending: '#c25a00', en_route: '#1d4ed8', arrived: '#1d4ed8' };
 const ALERT_ICO = { late: 'clock', long_stop: 'clock', failure: 'x', cash_gap: 'cash', driver_offline: 'wifioff', far_delivery: 'pin', stale_package: 'box',
-  doc_expiring: 'receipt', cash_limit: 'cash', sos: 'alert', overload: 'alert', not_scanned: 'scan' };
+  doc_expiring: 'receipt', cash_limit: 'cash', sos: 'alert', overload: 'alert', not_scanned: 'scan', maintenance_due: 'wrench' };
 
 export default function Control() {
   const { data: d, error, loading, reload } = useRpc('lg_dashboard', {}, { refresh: 15000 });
