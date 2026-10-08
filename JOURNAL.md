@@ -2,6 +2,18 @@
 
 Le plus récent en premier.
 
+## 08/10/2026 — ⚠️ Tâches planifiées : le Worker cron n'est jamais déclenché par Cloudflare
+- `nexus-logistics-cron` est déployé, son déclencheur `*/5 * * * *` est enregistré (API schedules), son secret posé,
+  et le serveur accepte le secret (403 à un faux secret, pas 503). Mais **aucune exécution** entre 18:15 et 19:35 :
+  `cron_runs` vide, 0 invocation dans les statistiques, `wrangler tail` connecté sur 4 créneaux sans un événement.
+  Deux redéploiements (wrangler 4.148, avec et sans `workers_dev`) n'y changent rien. Le compte n'a que 3
+  déclencheurs (devizo-cron, nexus-cron, celui-ci) : pas de dépassement de quota. `nexus-cron` tourne, lui.
+- **Conséquence** : surveillance (alertes de retard), relances des vendeurs, envoi automatique de la file de messages,
+  nettoyage et rapport du soir ne tournent pas. Le reste de l'application fonctionne (les messages restent envoyables
+  à la main depuis la file d'envoi, par lien WhatsApp).
+- **Piste retenue, en attente de l'accord de l'utilisateur** : faire appeler ces tâches par `nexus-cron` (fiable,
+  alertes Sentry), avec un secret dédié — touche le planificateur de NEXUS Market.
+
 ## 08/10/2026 — NEXUS Market branché côté nexus-market ; prix `price_fcfa` accepté par l'API
 - **nexus-market** (commit `5765b4e`) : envoi des commandes payées (Stripe, PayTech) et à payer à la livraison à
   `POST /api/v1/orders` ; route `POST /api/logistique/webhook` (signature HMAC vérifiée, statut conditionnel, lien de
