@@ -1,6 +1,6 @@
 // Modules 10, 12, 15 — Flotte, tarifs et zones, rôles et réglages.
 import React, { useState } from 'react';
-import { rpc, MODE } from '../lib/backend.js';
+import { rpc } from '../lib/backend.js';
 import { useMe, ROLE_FR } from '../App.jsx';
 import { errText } from '../lib/errors.js';
 import { Icon, useRpc, useAction, Btn, Card, Badge, Empty, Loading, ErrorBox, PageHead, Modal, Field, Tabs, Chips, StatusBadge, formatF, dmy } from '../components/ui.jsx';
@@ -9,7 +9,7 @@ export default function Admin() {
   const me = useMe();
   const [tab, setTab] = useState(me.is_admin ? 'staff' : 'fleet');
   const tabs = me.is_admin ? [['staff', 'Rôles'], ['fleet', 'Flotte'], ['pricing', 'Tarifs et zones'], ['devices', 'Appareils'], ['config', 'Réglages'],
-    ...(MODE === 'api' ? [['plan', 'Abonnement'], ['api', 'API boutiques'], ['whatsapp', 'WhatsApp']] : [])] : [['fleet', 'Flotte']];
+    ['plan', 'Abonnement'], ['api', 'API boutiques'], ['whatsapp', 'WhatsApp']] : [['fleet', 'Flotte']];
   return <>
     <PageHead title="Administration" back="/" />
     <Tabs tabs={tabs} value={tab} onChange={setTab} />
@@ -37,7 +37,7 @@ function Staff() {
         <Field label="Lieu"><select className="input" value={pick.hub} onChange={(e) => setPick({ ...pick, hub: e.target.value })}><option value="">Tous les lieux</option>{hubs.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}</select></Field>
         <Btn kind="primary" onClick={() => run(async () => { const r = await rpc('lg_grant_role', { p_user: pick.u.id, p_role: pick.role, p_hub: pick.hub || null }); setPick(null); reload(); return r; }, { ok: 'Rôle attribué' })}>Attribuer</Btn>
         <p className="small muted">Un même compte peut cumuler deux rôles. Les chauffeurs sont les livreurs déjà inscrits (table couriers).</p></div>}</Card>
-    {MODE === 'api' && <Invite />}
+    <Invite />
   </div>;
 }
 
@@ -163,7 +163,7 @@ function Pricing() {
   if (!data) return <ErrorBox error={error} />;
   const qZone = quote.zone || data.zones[0]?.name || '';
   return <div className="stack"><ErrorBox error={error} />
-    {MODE === 'api' && <NewZone empty={!data.zones.length} reload={reload} />}
+    <NewZone empty={!data.zones.length} reload={reload} />
     <div className="split">
       <Card><h3>Grille de prix</h3><div className="scroll-x"><table className="tbl"><thead><tr><th>Service</th><th>Zone</th><th>Véhicule</th><th className="num">Jusqu'à</th><th className="num">Prix</th><th className="num">Délai</th><th></th></tr></thead>
         <tbody>{data.rate_cards.map((r) => <tr key={r.id}><td>{r.service}</td><td>{r.zone ?? 'toutes'}</td><td>{r.vehicle_kind ?? 'tous'}</td><td className="num">{r.max_weight_g / 1000} kg</td>
@@ -176,7 +176,7 @@ function Pricing() {
           <input className="input" inputMode="numeric" placeholder="jusqu'à (kg)" value={rc.max_weight_g} onChange={(e) => setRc({ ...rc, max_weight_g: e.target.value })} />
           <input className="input" inputMode="numeric" placeholder="prix (F)" value={rc.price_fcfa} onChange={(e) => setRc({ ...rc, price_fcfa: e.target.value })} />
           <input className="input" inputMode="numeric" placeholder="délai (h)" value={rc.lead_hours} onChange={(e) => setRc({ ...rc, lead_hours: e.target.value })} />
-          {MODE === 'api' && <input className="input" inputMode="numeric" placeholder="+ prix au km (F, facultatif)" value={rc.per_km_fcfa} onChange={(e) => setRc({ ...rc, per_km_fcfa: e.target.value.replace(/\D/g, '') })} />}</div>
+          {<input className="input" inputMode="numeric" placeholder="+ prix au km (F, facultatif)" value={rc.per_km_fcfa} onChange={(e) => setRc({ ...rc, per_km_fcfa: e.target.value.replace(/\D/g, '') })} />}</div>
         <Btn kind="primary" style={{ marginTop: 8 }} disabled={!rc.price_fcfa} onClick={() => run(async () => {
           await rpc('lg_upsert_rate_card', { p: { ...rc, max_weight_g: Number(rc.max_weight_g) * 1000, price_fcfa: Number(rc.price_fcfa), lead_hours: Number(rc.lead_hours), per_km_fcfa: Number(rc.per_km_fcfa) || 0 } }); reload();
         }, { ok: 'Tarif ajouté' })}>Ajouter le tarif</Btn></Card>
@@ -230,7 +230,7 @@ function ZoneRow({ z, reload }) {
     <td><input className="input" style={{ minHeight: 36, width: 110 }} type="time" value={String(f.cutoff_time).slice(0, 5)} onChange={(e) => s('cutoff_time', e.target.value)} /></td>
     <td><input className="input" style={{ minHeight: 36, width: 110 }} inputMode="numeric" value={f.free_above_fcfa ?? ''} onChange={(e) => s('free_above_fcfa', e.target.value)} /></td>
     <td>{dirty && <Btn size="sm" kind="primary" onClick={() => run(async () => { await rpc('lg_set_zone', { p_zone: z.name, p: { served: f.served, cutoff_time: f.cutoff_time, free_above_fcfa: f.free_above_fcfa ? Number(f.free_above_fcfa) : null, delivery_days: f.delivery_days } }); setDirty(false); reload(); }, { ok: 'Zone mise à jour' })}>OK</Btn>}
-      {MODE === 'api' && !dirty && <Btn size="sm" kind="ghost" title="Supprimer la zone" onClick={() => { if (confirm(`Supprimer la zone ${z.name} ?`)) run(async () => { const r = await rpc('lg_zone_delete', { p_zone: z.name }); reload(); return r; }, { ok: 'Zone supprimée' }); }}>✕</Btn>}</td></tr>;
+      {!dirty && <Btn size="sm" kind="ghost" title="Supprimer la zone" onClick={() => { if (confirm(`Supprimer la zone ${z.name} ?`)) run(async () => { const r = await rpc('lg_zone_delete', { p_zone: z.name }); reload(); return r; }, { ok: 'Zone supprimée' }); }}>✕</Btn>}</td></tr>;
 }
 
 const CFG = [['max_attempts', 'Présentations avant retour vendeur'], ['proof_radius_m', 'Rayon de validation (m)'], ['cash_limit_fcfa', 'Plafond d\'espèces par chauffeur (F)'],
@@ -250,12 +250,10 @@ function Config() {
   const cur = f ?? data?.config ?? {};
   return <Card><div className="grid cols-2">{CFG.map(([k, l]) => <Field key={k} label={l}><input className="input" value={cur[k] ?? ''} placeholder="valeur par défaut"
     onChange={(e) => setF({ ...cur, [k]: e.target.value })} /></Field>)}
-    {MODE === 'api' ? <Field label="Émetteur de la facture client"><select className="input" value={cur.invoice_issuer ?? 'company'} onChange={(e) => setF({ ...cur, invoice_issuer: e.target.value })}>
+    <Field label="Émetteur de la facture client"><select className="input" value={cur.invoice_issuer ?? 'company'} onChange={(e) => setF({ ...cur, invoice_issuer: e.target.value })}>
       <option value="company">L'entreprise, en son nom</option><option value="vendor">Le vendeur (facture émise pour son compte)</option></select></Field>
-    : <Field label="Émetteur de la facture client"><select className="input" value={cur.invoice_issuer ?? 'vendor_via_nexus'} onChange={(e) => setF({ ...cur, invoice_issuer: e.target.value })}>
-      <option value="vendor_via_nexus">Le vendeur, par l'intermédiaire de NEXUS</option><option value="nexus">NEXUS Market en son nom</option></select></Field>}
     <label className="check"><input type="checkbox" checked={cur.require_photo !== false && cur.require_photo !== 'false'} onChange={(e) => setF({ ...cur, require_photo: e.target.checked })} /> Photo obligatoire à la livraison et à l'échec</label>
-    {MODE === 'api' && <label className="check"><input type="checkbox" checked={cur.prep_at_vendor === true || cur.prep_at_vendor === 'true'} onChange={(e) => setF({ ...cur, prep_at_vendor: e.target.checked })} /> Les commandes d'un vendeur se préparent chez lui (sinon au dépôt)</label>}</div>
+    {<label className="check"><input type="checkbox" checked={cur.prep_at_vendor === true || cur.prep_at_vendor === 'true'} onChange={(e) => setF({ ...cur, prep_at_vendor: e.target.checked })} /> Les commandes d'un vendeur se préparent chez lui (sinon au dépôt)</label>}</div>
     <PeakDays value={Array.isArray(cur.peak_days) ? cur.peak_days : []} onChange={(peak_days) => setF({ ...cur, peak_days })} />
     <Btn kind="primary" size="xl" style={{ marginTop: 12 }} disabled={!f || busy} onClick={() => run(async () => {
       const clean = Object.fromEntries(Object.entries(f).filter(([, v]) => v !== '' && v != null).map(([k, v]) => [k, typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v) ? Number(v) : v]));

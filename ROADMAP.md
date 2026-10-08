@@ -100,7 +100,7 @@ l'aperçu (`logistics-full`), migrations D1 appliquées en ligne, déploiement d
       « livreur en route », « livré », « reprise prévue » → C8 ; `lg_my_reinforcements` (renforts) → C7 ;
       `lg_track_incidents` / réponse du client à une proposition d'incident → C11.
 
-## C6 — Caisse, factures, reversements ✅ portage (08/10/2026) → BASCULE à faire
+## C6 — Caisse, factures, reversements ✅ (08/10/2026) — bascule faite le 08/10/2026
 - [x] Versements chauffeur (`lg_remit_cash`, comptage par billets), versements intermédiaires (`lg_cash_drop`),
       écarts → incident `cash_gap`, rapprochement (caisse versée, pas d'écart ouvert, colis rendus, collectes reçues),
       gains chauffeur au rapprochement (réglages `pay_*`, `bonus_*` ; retenue = gain négatif), reçu (`lg_cash_desk`).
@@ -108,7 +108,7 @@ l'aperçu (`logistics-full`), migrations D1 appliquées en ligne, déploiement d
       sur retour d'un client livré, export comptable, relevés de reversement vendeur (`commission_pct`), facture sur
       la page de suivi ; incidents (`lg_open_incident`, `lg_incidents_list`, `lg_resolve_incident` : retenue,
       indemnité plafonnée, avoir, accord du client via `lg_track_incidents` / `lg_track_incident_answer`).
-- [ ] **BASCULE** : `deploy.yml` construit `build:api` sur `main` ; logistique.nexusmarket.sn sert la version
+- [x] **BASCULE** (08/10/2026, session locale) : `deploy.yml` construit la version complète sur `main` ; logistique.nexusmarket.sn sert la version
       complète. Suppression du mode démo (PGlite, `src/demo/`, `seed`), de `supabase-js` et du mode
       `supabase` dans `backend.js` ; écran d'accueil sans « Démonstration ». Les fonctions pas encore
       portées affichent « bientôt disponible » au lieu d'une erreur.
@@ -164,14 +164,14 @@ l'aperçu (`logistics-full`), migrations D1 appliquées en ligne, déploiement d
       `lg-fallback.js` — étapes détaillées au § 5 de `docs/integration-boutiques.md`.
 - Reste : migration `0010` à appliquer en ligne ; créer l'entreprise « NEXUS Market », sa clé et son adresse de rappel.
 
-## C11 — Fonctions avancées restantes et nettoyage ✅ portage (08/10/2026)
+## C11 — Fonctions avancées restantes et nettoyage ✅ (08/10/2026)
 - [x] Ce qui restait des cycles 6 à 22 : engagement de délai des vendeurs (`lg_my_commitment`,
       `lg_vendor_commitment_set`, `lg_vendor_commitments_list`, heure limite des préparations, relances par la tâche
       planifiée « reminders »). Incidents et assurance, retours et causes, coûts, renforts : portés aux C5 à C7.
       Toutes les fonctions appelées par l'interface existent désormais en mode `api` ; les fonctions Postgres non
       portées sont des aides internes réécrites en JavaScript, ou `lg_upsert_pay_rule` / `lg_issue_invoice_manual`
       (sans écran : paie réglée par l'entreprise, facture émise à la livraison). 2 tests serveur.
-- [ ] Suppression de l'archive Postgres (`supabase/`, `test/sql/`, `nexus-logistics-mvp.sql`) et mise à jour du
-      README : **après la bascule** (C6) — le mode démo et `npm run build` en dépendent encore.
+- [x] Suppression de l'archive Postgres (`supabase/`, `test/sql/`, `nexus-logistics-mvp.sql`), du mode démo et de
+      `supabase-js` ; README réécrit (08/10/2026, après la bascule).
 - Reste : migration `0011` à appliquer en ligne ; bascule (voir C6) puis nettoyage.
 

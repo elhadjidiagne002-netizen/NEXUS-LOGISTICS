@@ -2,6 +2,26 @@
 
 Le plus récent en premier.
 
+## 08/10/2026 — Bascule : logistique.nexusmarket.sn sert la version complète, démo supprimée
+- **Rapatrié** : cycles C2 à C11 réalisés par la routine cloud (79 tests serveur) ; local = GitHub.
+- **Base en ligne** : les migrations 0002 à 0011 étaient déjà appliquées (0002 à 12:42, 0003-0011 à 18:02) ; une
+  entreprise réelle s'est déjà inscrite (12:49) — ses données sont conservées.
+- **Tâches planifiées** : Worker `nexus-logistics-cron` déployé (toutes les 5 min) ; il **lève** désormais quand une
+  tâche échoue (avant : simple journal → compté « en succès » par Cloudflare, piège déjà vécu sur nexus-cron) ;
+  journaux d'exécution activés (`[observability]`).
+- **Secrets Pages posés** : `CRON_SECRET` (même valeur que le Worker, posée depuis un fichier généré puis effacé),
+  `SECRETS_KEY` (ne jamais la changer), `ADMIN_EMAILS` (adresse de l'utilisateur). `BREVO_API_KEY` non posée
+  (e-mail de secours inactif, WhatsApp seulement).
+- **Bascule** : `npm run build` construit la version complète (mode `api` seul) ; `deploy.yml` applique les
+  migrations D1 avant de publier et vérifie `/api/health`. Supprimés : mode démo (PGlite, `src/demo/`,
+  scénario), mode Supabase, `supabase-js`, archive Postgres (`supabase/`, `test/sql/`, `nexus-logistics-mvp.sql`,
+  `.env.example`). Interface 0,73 Mo. Service worker v2 (purge des fichiers de la démo) et effacement de
+  l'ancienne base de démo dans le navigateur des visiteurs qui l'avaient ouverte.
+- **Vérifié** : 91 tests (79 serveur + 12 algorithmes), construction, écran public sans trace de démo.
+- **Reste** : partie côté nexus-market (envoi des commandes, réception des statuts, retrait de `lg-fallback.js`) ;
+  création de l'entreprise « NEXUS Market » sur la plateforme, de sa clé et de son secret de rappel (par
+  l'utilisateur) ; numéros Wave / Orange Money dans Plateforme → Formules.
+
 ## 08/10/2026 — Cycle C11 (Cloudflare) : engagements des vendeurs, fin du portage
 - **Fait** : `migrations/0011_engagements.sql` ; `server/rpc/engagements.js` (engagement de délai, suivi, relances
   « bientôt » / « en retard » par la tâche planifiée « reminders ») ; heure limite d'une préparation = commande + délai
@@ -556,10 +576,8 @@ Dépôt git initialisé, aucun commit.
   (`vars.texte`, modèles modifiables) ; envoi codé côté NEXUS (WhatsApp, e-mail Brevo en secours,
   `lg-fallback.js`) — actif dès que les migrations seront appliquées.
 - Planificateur : `lg_watchdog`, `lg_vendor_reminders`, `lg_purge`, `lg_evening_report` prêts, non planifiés.
-- Hébergement : Cloudflare Pages `nexus-logistics`, **https://logistique.nexusmarket.sn** = démo (PGlite)
-  jusqu'à la bascule du cycle C6 ; version complète en prévisualisation sur
-  https://complet.nexus-logistics-6my.pages.dev (Functions + D1 `nexus-logistics`). Déploiement automatique
-  bloqué faute de `CLOUDFLARE_API_TOKEN` (déploiement à la main).
+- Hébergement : Cloudflare Pages `nexus-logistics`, **https://logistique.nexusmarket.sn** = version complète
+  (bascule du 08/10/2026), déploiement automatique à chaque push sur `main` (migrations D1 comprises).
 - Base de la version complète : D1 `nexus-logistics` (migration 0001 appliquée). La base Supabase de NEXUS
   n'est plus la cible : les migrations `supabase/` ne seront PAS appliquées (archive de référence).
 

@@ -25,11 +25,8 @@ jobs:
       - name: Installation
         run: npm ci
 
-      - name: Tests (serveur Cloudflare + référence SQL + algorithmes)
+      - name: Tests (serveur + algorithmes)
         run: npm test
 
       - name: Construction
         run: npm run build
-
-      - name: Construction (version complète, mode api)
-        run: npm run build:api

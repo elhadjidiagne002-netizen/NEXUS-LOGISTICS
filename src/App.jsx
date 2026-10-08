@@ -1,5 +1,5 @@
 import React, { Suspense, lazy, useEffect, useState } from 'react';
-import { backend, MODE, DEMO_USERS, onAuthChange, rpc, setSimulatedOffline, isOffline, DEVICE_ID, deviceLabel, RpcError } from './lib/backend.js';
+import { backend, onAuthChange, rpc, isOffline, DEVICE_ID, deviceLabel, RpcError } from './lib/backend.js';
 import { subscribeQueue, flush, clearRejected } from './lib/offline.js';
 import { errText } from './lib/errors.js';
 import { NavProvider, ToastProvider, useNav, Btn, Card, Field, Loading, Link, Modal, ago } from './components/ui.jsx';
@@ -50,7 +50,7 @@ function Root() {
   const { path } = useNav();
   useTheme();
   if (path.startsWith('/suivi/')) return <Suspense fallback={<div className="app"><Loading /></div>}><Track token={path.split('/')[2]} /></Suspense>;
-  if (MODE === 'api' && path.startsWith('/invitation/')) return <Invitation token={path.split('/')[2]} />;
+  if (path.startsWith('/invitation/')) return <Invitation token={path.split('/')[2]} />;
   return <Authed />;
 }
 
@@ -101,19 +101,10 @@ function Authed() {
 }
 
 function Boot() {
-  const [step, setStep] = useState(null);
-  const [secs, setSecs] = useState(0);
-  useEffect(() => {
-    const f = (e) => setStep(e.detail); addEventListener('lg-progress', f);
-    const i = setInterval(() => setSecs((s) => s + 1), 1000);
-    return () => { removeEventListener('lg-progress', f); clearInterval(i); };
-  }, []);
   return <div className="login-wrap" style={{ gridTemplateColumns: '1fr', placeItems: 'center' }}>
     <div className="center stack" style={{ alignItems: 'center', padding: 24 }}>
       <Logo size={64} /><h1 style={{ marginTop: 6 }}>NEXUS Logistics</h1>
-      <p className="muted">{MODE === 'demo' ? (step ?? 'Ouverture de la base de démonstration…') : 'Connexion…'}</p>
-      {MODE === 'demo' && step && <><div className="gauge" style={{ width: 280, gridTemplateColumns: '1fr' }}><div className="bar"><i style={{ width: `${Math.min(95, secs * 2.5)}%` }} /></div></div>
-        <p className="small muted">Première ouverture seulement · {secs} s</p></>}
+      <p className="muted">Connexion…</p>
     </div>
   </div>;
 }
@@ -127,18 +118,10 @@ export function Logo({ size = 32 }) {
     <circle cx="51" cy="50" r="4.5" fill="#fbbf24" /></svg>;
 }
 
-const ROLE_ICON = { Administrateur: 'shield', Préparatrice: 'box', 'Chef de quai': 'truck', Répartitrice: 'map', Caissier: 'cash', Comptable: 'receipt',
-  'Service client': 'headset', Vendeur: 'store' };
 function Login({ error }) {
-  const [email, setEmail] = useState(''); const [pw, setPw] = useState(''); const [err, setErr] = useState(error);
-  useEffect(() => { if (error) setErr(error); }, [error]);
-  const signIn = async (e) => {
-    e?.preventDefault();
-    try { await (await backend()).signIn(email, pw); } catch (x) { setErr(x); }
-  };
   return <div className="login-wrap">
     <aside className="login-art">
-      <div className="brand" style={{ color: '#fff' }}><Logo size={40} /><span>NEXUS Logistics<small style={{ color: '#a7f3d0' }}>{MODE === 'api' ? 'Pour toute entreprise qui livre' : 'NEXUS Market · Dakar'}</small></span></div>
+      <div className="brand" style={{ color: '#fff' }}><Logo size={40} /><span>NEXUS Logistics<small style={{ color: '#a7f3d0' }}>Pour toute entreprise qui livre</small></span></div>
       <div className="stack" style={{ gap: 22 }}>
         <h1>De la commande payée à la livraison encaissée.</h1>
         <p style={{ maxWidth: 480, color: '#a7f3d0', margin: 0 }}>Préparation scannée, chargement contrôlé, livraison prouvée, caisse rapprochée et facture automatique — sur le terrain, même sans réseau.</p>
@@ -147,26 +130,14 @@ function Login({ error }) {
           <div><b>Livré</b>code client, photo, position</div><div><b>Encaissé</b>caisse et facture le jour même</div>
         </div>
       </div>
-      {MODE === 'api' && <Prices />}
+      <Prices />
       <small style={{ color: '#6ee7b7' }}>Conçu pour Dakar : adresses par repère, paiement à la livraison, Wave et Orange Money.</small>
     </aside>
     <main className="login-form">
       <div className="brand" style={{ marginBottom: 26 }}><Logo size={42} /><span>NEXUS Logistics<small>De la commande à l'encaissement</small></span></div>
-      {MODE === 'demo' ? <>
-        <h1>Démonstration</h1>
-        <p className="muted" style={{ marginTop: 0 }}>Une base complète tourne sur cet appareil, avec une journée fictive déjà commencée. Choisissez qui vous êtes :</p>
-        {err && <div className="flash bad" style={{ marginBottom: 12 }}>{errText(err)}</div>}
-        <div className="grid cols-2" style={{ gap: 10 }}>{DEMO_USERS.map((u) =>
-          <button key={u.id} className="role-card" onClick={async () => (await backend()).signIn(u.id)}>
-            <span className="chip-ico" style={{ width: 40, height: 40 }}><Icon name={ROLE_ICON[u.label] ?? (u.label.startsWith('Chauffeur') ? 'bike' : 'user')} /></span>
-            <span><b>{u.name}</b><span>{u.label}</span></span></button>)}</div>
-      </> : MODE === 'api' ? <ApiAuth initialError={err} /> : <form className="stack" onSubmit={signIn}>
-        <h1>Connexion</h1><p className="muted" style={{ marginTop: -6 }}>Votre compte NEXUS Market. Les rôles logistiques sont attribués par l'administrateur.</p>
-        <Field label="E-mail"><input className="input" type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required /></Field>
-        <Field label="Mot de passe"><input className="input" type="password" autoComplete="current-password" value={pw} onChange={(e) => setPw(e.target.value)} required /></Field>
-        {err && <div className="flash bad">{errText(err)}</div>}
-        <Btn kind="primary" type="submit" size="xl">Se connecter</Btn></form>}
-      {MODE === 'api' ? <PublicFooter /> : <SuiteNexus where="connexion" />}
+      <ApiAuth initialError={error} />
+      <PublicFooter />
+      <SuiteNexus where="connexion" />
     </main>
   </div>;
 }
@@ -276,7 +247,7 @@ const initials = (n) => (n ?? '?').split(/\s+/).map((x) => x[0]).slice(0, 2).joi
 function Sidebar({ me, tiles, path }) {
   const groups = [...new Set(tiles.map((t) => t.group))];
   return <aside className="sidebar" aria-label="Menu">
-    <Link to="/" className="brand"><Logo size={34} /><span>NEXUS Logistics<small style={{ color: '#64748b' }}>{MODE === 'demo' ? 'Démonstration' : me.company?.name ?? 'NEXUS Market'}</small></span></Link>
+    <Link to="/" className="brand"><Logo size={34} /><span>NEXUS Logistics<small style={{ color: '#64748b' }}>{me.company?.name}</small></span></Link>
     <Link to="/" className={`side-link ${path === '/' ? 'on' : ''}`}><Icon name="home" />Accueil</Link>
     {groups.map((g) => <React.Fragment key={g}><div className="side-label">{g}</div>
       {tiles.filter((t) => t.group === g).map((t) => <Link key={t.to} to={t.to} className={`side-link ${path.startsWith(t.to) ? 'on' : ''}`}>
@@ -334,7 +305,6 @@ function TopBar({ me }) {
   const waiting = q.pending + q.uploads;
   return <header className="topbar">
     <Link to="/" className="brand"><Logo size={30} /><span className="hide-sm">NEXUS Logistics</span></Link>
-    {MODE === 'demo' && <span className="badge info">Démo</span>}
     <span className="spacer" />
     <button className={`netpill ${off ? 'off' : waiting ? 'queue' : ''}`} onClick={() => setOpen(true)} aria-label="État du réseau">
       <Icon name={off ? 'wifioff' : waiting ? 'refresh' : 'wifi'} size={15} />
@@ -350,11 +320,7 @@ function TopBar({ me }) {
           <ul>{q.rejected.map((r, i) => <li key={i}>{r.label} — {errText(r.error)} <span className="muted small">({ago(r.at)})</span></li>)}</ul>
           <Btn size="sm" onClick={clearRejected}>J'ai compris</Btn></div>}
         <div className="row"><Btn kind="primary" onClick={() => flush()} disabled={off}><Icon name="refresh" size={18} />Synchroniser maintenant</Btn></div>
-        {MODE === 'demo' && <Card kind="flat"><b>Outils de démonstration</b>
-          <label className="check"><input type="checkbox" checked={off} onChange={(e) => { setSimulatedOffline(e.target.checked); setOff(e.target.checked); if (!e.target.checked) flush(); }} /> Simuler une coupure réseau</label>
-          <div className="row"><Btn onClick={async () => (await backend()).signOut()}><Icon name="users" size={18} />Changer de rôle</Btn>
-            <Btn kind="bad" onClick={async () => { if (confirm('Effacer la base de démonstration et recommencer la journée ?')) (await backend()).reset(); }}>Réinitialiser la démo</Btn></div></Card>}
-        {MODE !== 'demo' && <Btn onClick={async () => (await backend()).signOut()}><Icon name="logout" size={18} />Se déconnecter</Btn>}
+        <Btn onClick={async () => (await backend()).signOut()}><Icon name="logout" size={18} />Se déconnecter</Btn>
       </div></Modal>}
   </header>;
 }

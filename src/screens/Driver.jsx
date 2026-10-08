@@ -4,7 +4,6 @@ import { rpc } from '../lib/backend.js';
 import { act, queueUpload } from '../lib/offline.js';
 import { errText } from '../lib/errors.js';
 import { normalizeCode } from '../lib/algo.js';
-import { MODE, backend } from '../lib/backend.js';
 import { useRpc, useAction, useNav, useToast, feedback, Icon, Stat, Btn, Card, Badge, Empty, Loading, ErrorBox, PageHead, Modal, Field, Chips,
   StatusBadge, formatF, hhmm, kg } from '../components/ui.jsx';
 import { Scanner, SignaturePad, PhotoInput } from '../components/field.jsx';
@@ -228,7 +227,6 @@ function Stop({ stop: s, reload }) {
 
       <Card><h3>3. Preuve</h3>
         {!useSig ? <><p className="small muted center">Code de livraison du client (4 chiffres, reçu par WhatsApp)</p>
-          <DemoOtp orderId={s.order_id} />
           <div className="otp">{otp.map((d, i) => <input key={i} id={`otp${i}`} inputMode="numeric" maxLength={1} value={d} aria-label={`Chiffre ${i + 1}`}
             onChange={(e) => { const v = e.target.value.replace(/\D/g, '').slice(-1); const n = [...otp]; n[i] = v; setOtp(n); if (v && i < 3) document.getElementById(`otp${i + 1}`)?.focus(); }} />)}</div>
           <Btn kind="ghost" block onClick={() => setUseSig(true)}>Pas de code : signature</Btn></>
@@ -299,12 +297,6 @@ function Expense({ tripId, onClose }) {
     }, { ok: 'Dépense enregistrée' })}>Enregistrer</Btn></div></Modal>;
 }
 
-// Mode démo seulement : le message WhatsApp n'existe pas, on montre le code « envoyé » pour pouvoir s'entraîner.
-function DemoOtp({ orderId }) {
-  const [code, setCode] = useState(null);
-  useEffect(() => { if (MODE === 'demo') backend().then((b) => b.peekOtp?.(orderId)).then(setCode).catch(() => {}); }, [orderId]);
-  return code ? <p className="small center"><Badge kind="info">Démo · code envoyé au client : <b className="mono">{code}</b></Badge></p> : null;
-}
 
 /* ------------------------------------------------------------ COLLECTE ET REPRISE */
 function Collect({ s, reload }) {

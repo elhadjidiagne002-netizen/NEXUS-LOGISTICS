@@ -14,3 +14,7 @@ crons = ["*/5 * * * *"]
 
 [vars]
 API_URL = "https://logistique.nexusmarket.sn"
+
+# Journaux des exécutions (job et code HTTP de chaque échec lisibles dans le tableau de bord)
+[observability]
+enabled = true

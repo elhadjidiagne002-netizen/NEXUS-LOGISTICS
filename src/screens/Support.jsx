@@ -1,7 +1,7 @@
 // Modules 06/13 — Service client : confirmations à appeler, demandes des clients,
 // incidents, fiche colis (chaîne de garde : « chez qui était-il ? » en une requête).
 import React, { useState } from 'react';
-import { rpc, MODE } from '../lib/backend.js';
+import { rpc } from '../lib/backend.js';
 import { Orders, Catalogue } from '../components/orders.jsx';
 import { Icon, useRpc, useAction, useNav, Btn, Card, Badge, Empty, Loading, ErrorBox, PageHead, Modal, Field, Tabs, Chips, StatusBadge,
   formatF, hhmm, dmy, ago } from '../components/ui.jsx';
@@ -14,7 +14,7 @@ const EV = { pack: 'Emballé', stage: 'Mis à quai', load: 'Chargé', unload: 'D
 
 export default function Support({ code }) {
   // version complète (Cloudflare) : les commandes naissent ici (saisie, fichier, API des boutiques)
-  const api = MODE === 'api';
+  const api = true; // fonctions de la version Cloudflare (commandes, catalogue)
   const [tab, setTab] = useState(code ? 'package' : api ? 'orders' : 'confirm');
   return <>
     <PageHead title="Service client" back="/" />

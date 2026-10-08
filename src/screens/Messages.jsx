@@ -1,7 +1,7 @@
 // Module 06 — Messages au client (annexe B) : modifiables sans toucher au code, aperçu en direct,
 // file d'envoi. Le texte final part avec chaque message (vars.texte) vers l'expéditeur WhatsApp.
 import React, { useEffect, useMemo, useState } from 'react';
-import { rpc, MODE } from '../lib/backend.js';
+import { rpc } from '../lib/backend.js';
 import { useRpc, useAction, Btn, Card, Badge, Empty, Loading, ErrorBox, PageHead, Tabs, Stat, ago } from '../components/ui.jsx';
 import { Icon } from '../components/icons.jsx';
 
@@ -86,11 +86,9 @@ function Queue() {
     {stats && <div className="stats"><Stat icon="message" c="#16a34a" label="WhatsApp envoyés (7 j)" value={stats.whatsapp_sent} />
       <Stat icon="inbox" c="#2563eb" label="e-mails de secours" value={stats.email_fallback} />
       <Stat icon="clock" label="en attente" value={stats.pending} /><Stat icon="alert" c="#dc2626" label="échecs définitifs" value={stats.failed} kind={stats.failed ? 'bad' : ''} /></div>}
-    {MODE === 'api' ? <p className="small muted" style={{ margin: 0 }}>{stats?.automatic ? 'Envoyés automatiquement par votre instance WhatsApp (toutes les 5 minutes)'
+    <p className="small muted" style={{ margin: 0 }}>{stats?.automatic ? 'Envoyés automatiquement par votre instance WhatsApp (toutes les 5 minutes)'
       : 'Envoi manuel gratuit : « Envoyer » ouvre WhatsApp avec le message prêt (branchez une instance dans Administration → WhatsApp pour l\'envoi automatique)'} ;
       si WhatsApp échoue et qu'une adresse existe, un <b>e-mail de secours</b> part (une seule fois).</p>
-    : <p className="small muted" style={{ margin: 0 }}>Déposés dans <span className="kbd">notification_outbox</span> et envoyés par NEXUS Market : WhatsApp d'abord, avec reprises ;
-      si WhatsApp échoue ou si le numéro manque, un <b>e-mail de secours</b> part par Brevo (une seule fois, jamais les deux).</p>}
     {!data?.length ? <Card><Empty icon="inbox">Aucun message pour l'instant.</Empty></Card> :
       <div className="grid cols-2">{data.map((m) => { const [l, k] = channel(m); return <Card key={m.id}>
         <div className="row between" style={{ marginBottom: 8 }}><b>{m.label ?? m.event_key}</b><Badge kind={k}>{l}</Badge></div>

@@ -1,7 +1,7 @@
 // Module 06 — Page de suivi publique : lien unique, sans compte. Fonctionne pour les invités
 // (49 commandes sur 53 sont passées sans compte). Le client ne doit jamais avoir à demander « où est ma commande ? ».
 import React, { useEffect, useState } from 'react';
-import { backend, MODE } from '../lib/backend.js';
+import { backend } from '../lib/backend.js';
 import { errText } from '../lib/errors.js';
 import { printInvoice } from '../lib/print.js';
 import { Logo } from '../App.jsx';
@@ -30,7 +30,7 @@ export default function Track({ token }) {
   const o = d.order; const del = d.delivery;
   const current = [...d.steps].reverse().find((s) => s.at)?.key;
   return <div className="app" style={{ maxWidth: 640, paddingTop: 16 }}>
-    <div className="row" style={{ marginBottom: 14 }}><Logo size={36} /><div><b>{d.company?.name ?? 'NEXUS Market'}</b><div className="small muted">Suivi de commande {o.number ? `n° ${o.number}` : o.short}{MODE === 'demo' ? ' · démo' : ''}</div></div></div>
+    <div className="row" style={{ marginBottom: 14 }}><Logo size={36} /><div><b>{d.company?.name ?? 'NEXUS Market'}</b><div className="small muted">Suivi de commande {o.number ? `n° ${o.number}` : o.short}</div></div></div>
     <div className="hero">
       <div className="small" style={{ color: '#6ee7b7', fontWeight: 600 }}>{o.first_name ? `Bonjour ${o.first_name}` : 'Votre commande'} · {o.vendor}</div>
       <h1 style={{ margin: '6px 0', fontSize: '1.9rem' }}>{o.status === 'delivered' ? 'Livrée' : o.status === 'cancelled' ? 'Commande annulée' : o.status === 'in_transit' ? 'En route'

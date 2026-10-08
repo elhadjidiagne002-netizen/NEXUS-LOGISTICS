@@ -1,7 +1,7 @@
 // Module 09 — Espace vendeur : suivre ses colis sans appeler, compléter ses fiches (code, poids, taille),
 // voir ses lots qui périment à l'entrepôt.
 import React, { useState } from 'react';
-import { rpc, MODE } from '../lib/backend.js';
+import { rpc } from '../lib/backend.js';
 import { useMe } from '../App.jsx';
 import { VendorStatement } from '../components/statement.jsx';
 import { useRpc, useAction, useNav, Btn, Card, Badge, Empty, Loading, ErrorBox, PageHead, Stat, Tabs, Chips, StatusBadge, HANDLING, ago } from '../components/ui.jsx';
@@ -140,7 +140,7 @@ function Dropoff() {
   if (error) return <ErrorBox error={error} />;
   const when = (x) => `${new Date(x.day + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })} · ${x.start.slice(0, 5)}–${x.end.slice(0, 5)}`;
   return <div className="stack">
-    {MODE === 'api' && <PickupAddress />}
+    <PickupAddress />
     <Card><h3>Mes colis prêts : {d.ready_packages}</h3>
       {d.booking ? <><div className="flash ok"><div>Dépôt prévu <b>{when(d.booking)}</b> au {d.booking.hub} · {d.booking.packages} colis</div></div>
         <div className="row" style={{ marginTop: 8 }}><Btn kind="ghost" disabled={busy} onClick={() => run(async () => { const r = await rpc('lg_dropoff_cancel', { p_booking: d.booking.id }); reload(); return r; }, { ok: 'Dépôt annulé : un chauffeur viendra collecter' })}>Annuler le dépôt</Btn></div></>

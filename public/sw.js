@@ -4,8 +4,8 @@
 //   /index.html, et resservir une réponse redirigée à une navigation casse l'app
 //   (incident déjà vécu sur My shop, CV et NEXUS le 01/10/2026).
 // - /assets/* (noms à empreinte, immuables) : cache d'abord.
-// - Appels Supabase : jamais mis en cache (la file hors ligne de l'app s'en charge).
-const CACHE = 'nexus-logistics-v1';
+// - Appels /api : jamais mis en cache (la file hors ligne de l'app s'en charge).
+const CACHE = 'nexus-logistics-v2'; // v2 : fin du mode démo (purge des fichiers PGlite)
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.add(new Request('/', { cache: 'reload' }))).then(() => self.skipWaiting()));
