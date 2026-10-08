@@ -2,7 +2,7 @@
 // file d'envoi. Le texte final part avec chaque message (vars.texte) vers l'expéditeur WhatsApp.
 import React, { useEffect, useMemo, useState } from 'react';
 import { rpc } from '../lib/backend.js';
-import { useRpc, useAction, Btn, Card, Badge, Empty, Loading, ErrorBox, PageHead, Tabs, ago } from '../components/ui.jsx';
+import { useRpc, useAction, Btn, Card, Badge, Empty, Loading, ErrorBox, PageHead, Tabs, Stat, ago } from '../components/ui.jsx';
 import { Icon } from '../components/icons.jsx';
 
 export default function Messages() {
@@ -75,13 +75,21 @@ export function WhatsAppBubble({ text, at }) {
 }
 
 const ST = { pending: ['En attente', 'todo'], sent: ['Envoyé', 'ok'], failed: ['Échec', 'bad'], done: ['Envoyé', 'ok'] };
+// canal effectivement utilisé : WhatsApp, ou e-mail de secours (Brevo) quand WhatsApp a échoué
+const channel = (m) => m.whatsapp === 'sent' ? ['WhatsApp', 'ok'] : m.email === 'sent' ? ['E-mail de secours', 'info']
+  : m.status === 'failed' ? ['Échec', 'bad'] : m.whatsapp === 'skipped' && !m.has_email ? ['Aucun contact', 'bad'] : ST[m.status] ?? [m.status, ''];
 function Queue() {
   const { data, error, loading } = useRpc('lg_outbox_recent', { p_limit: 60 }, { refresh: 20000 });
+  const stats = useRpc('lg_outbox_channels', { p_days: 7 }, { refresh: 60000 }).data;
   if (loading && !data) return <Loading />;
   return <div className="stack"><ErrorBox error={error} />
-    <p className="small muted" style={{ margin: 0 }}>Déposés dans <span className="kbd">notification_outbox</span> ; l'envoi WhatsApp (puis SMS de secours) est fait par le pipeline NEXUS, avec reprises.</p>
+    {stats && <div className="stats"><Stat icon="message" c="#16a34a" label="WhatsApp envoyés (7 j)" value={stats.whatsapp_sent} />
+      <Stat icon="inbox" c="#2563eb" label="e-mails de secours" value={stats.email_fallback} />
+      <Stat icon="clock" label="en attente" value={stats.pending} /><Stat icon="alert" c="#dc2626" label="échecs définitifs" value={stats.failed} kind={stats.failed ? 'bad' : ''} /></div>}
+    <p className="small muted" style={{ margin: 0 }}>Déposés dans <span className="kbd">notification_outbox</span> et envoyés par NEXUS Market : WhatsApp d'abord, avec reprises ;
+      si WhatsApp échoue ou si le numéro manque, un <b>e-mail de secours</b> part par Brevo (une seule fois, jamais les deux).</p>
     {!data?.length ? <Card><Empty icon="inbox">Aucun message pour l'instant.</Empty></Card> :
-      <div className="grid cols-2">{data.map((m) => { const [l, k] = ST[m.whatsapp] ?? ST[m.status] ?? [m.status, '']; return <Card key={m.id}>
+      <div className="grid cols-2">{data.map((m) => { const [l, k] = channel(m); return <Card key={m.id}>
         <div className="row between" style={{ marginBottom: 8 }}><b>{m.label ?? m.event_key}</b><Badge kind={k}>{l}</Badge></div>
         <div className="small muted" style={{ marginBottom: 8 }}>{m.to} · {ago(m.created_at)}{m.attempts ? ` · ${m.attempts} essai(s)` : ''}</div>
         <WhatsAppBubble text={m.text} />{m.error && <div className="small" style={{ color: 'var(--bad)', marginTop: 6 }}>{m.error}</div>}</Card>; })}</div>}

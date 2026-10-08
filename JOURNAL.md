@@ -2,6 +2,22 @@
 
 Le plus récent en premier.
 
+## 08/10/2026 — Cycle 18 : canal de secours e-mail via Brevo (module 06, P2)
+- **Envoi fait par NEXUS Market** (dépôt `nexus-market`, même branche) : `functions/api/_lib/lg-fallback.js`,
+  appelé par `/cron/notify-retry` pour les événements `lg_*`. **WhatsApp d'abord** avec le texte final
+  (`vars.texte`) ; **e-mail Brevo seulement** si WhatsApp échoue (Green API et WAHA) ou si le numéro
+  manque — jamais les deux (offre Brevo gratuite : 300 e-mails/jour ; expéditeur `nx@nexusmarket.sn`,
+  vérifié actif sur le compte). WhatsApp s'arrête dès que l'e-mail est parti (`fallback_email`).
+- **Défaut évité** : sans ce branchement, le cron aurait ignoré le WhatsApp des `lg_*` (pas de modèle
+  côté NEXUS) et envoyé un e-mail générique **vide** pour chaque message logistique.
+- Côté base : les relances vendeur portent `profiles.email`, le rapport du soir le nouveau réglage
+  `manager_email` (les messages clients portaient déjà `buyer_email`). `lg_outbox_recent` donne le statut
+  e-mail ; `lg_outbox_channels` les totaux. Écran Messages → file d'envoi : canal utilisé par message
+  (WhatsApp / e-mail de secours / aucun contact) et totaux sur 7 jours.
+- Tests : 93/93 ici ; 9 tests unitaires côté NEXUS (`tests/unit/lg-fallback.test.js`).
+- Prérequis en production : `BREVO_API_KEY` dans les secrets Cloudflare de NEXUS (attention au plafond de
+  64 variables, CLAUDE.md NEXUS §12) — à vérifier, le code l'utilisait déjà en secours de Resend.
+
 ## 08/10/2026 — Cycle 17 : dépôt par le vendeur au hub (module 09, P2)
 - **Créneaux de dépôt** ouverts par le chef de quai (`lg_dropoff_slots_create` : à partir du, n jours,
   plages, vendeurs par créneau ; Quai → Réception → « Créneaux »).
@@ -323,7 +339,8 @@ Dépôt git initialisé, aucun commit.
 ## État actuel des intégrations
 - Base : migrations prêtes, **non appliquées** (ni test ni prod).
 - Messages : déposés dans `notification_outbox` (événements `lg_*`) **avec leur texte final**
-  (`vars.texte`, modèles modifiables) ; l'envoi WhatsApp par le pipeline NEXUS reste à brancher.
+  (`vars.texte`, modèles modifiables) ; envoi codé côté NEXUS (WhatsApp, e-mail Brevo en secours,
+  `lg-fallback.js`) — actif dès que les migrations seront appliquées.
 - Planificateur : `lg_watchdog`, `lg_vendor_reminders`, `lg_purge`, `lg_evening_report` prêts, non planifiés.
 - Hébergement : non déployé.
 

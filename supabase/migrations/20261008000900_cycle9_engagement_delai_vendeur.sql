@@ -115,7 +115,7 @@ create or replace function public.lg_vendor_reminders() returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare r record; v_stage text; v_vars jsonb; n int := 0;
 begin
-  for r in select t.id, t.order_id, t.cutoff_at, t.vendor_id, c.prep_hours, p.name, coalesce(nullif(p.whatsapp_number, ''), p.phone) phone
+  for r in select t.id, t.order_id, t.cutoff_at, t.vendor_id, c.prep_hours, p.name, p.email, coalesce(nullif(p.whatsapp_number, ''), p.phone) phone
              from public.lg_pick_tasks t join public.lg_vendor_commitments c on c.vendor_id = t.vendor_id
              join public.profiles p on p.id = t.vendor_id
             where t.status in ('todo', 'picking') and t.cutoff_at is not null and t.cutoff_at < now() + interval '2 hours'
@@ -128,7 +128,7 @@ begin
     v_vars := jsonb_build_object('vendeur', split_part(coalesce(r.name, ''), ' ', 1), 'commande', upper(left(r.order_id::text, 8)),
                                  'heure', to_char(r.cutoff_at at time zone 'Africa/Dakar', 'HH24"h"MI'), 'delai', r.prep_hours);
     insert into public.notification_outbox (event_key, recipient, vars)
-    values ('lg_vendor_prep_' || v_stage, jsonb_build_object('phone', r.phone, 'userId', r.vendor_id),
+    values ('lg_vendor_prep_' || v_stage, jsonb_build_object('phone', r.phone, 'email', r.email, 'userId', r.vendor_id),
             v_vars || jsonb_build_object('texte', public.lg_render_message('lg_vendor_prep_' || v_stage, v_vars)));
     n := n + 1;
   end loop;

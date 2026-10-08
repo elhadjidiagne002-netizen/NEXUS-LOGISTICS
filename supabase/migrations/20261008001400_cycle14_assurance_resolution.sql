@@ -34,7 +34,7 @@ begin
                  'otp_ttl_hours', 'otp_attempts', 'heavy_kg', 'require_photo', 'staged_max_hours', 'stop_max_minutes',
                  'offline_max_minutes', 'pay_per_package', 'pay_fixed_trip', 'bonus_zero_failure', 'tracking_base_url',
                  'invoice_issuer', 'manager_phone', 'eur_to_fcfa', 'double_check_fcfa', 'bonus_on_time', 'peak_days',
-                 'expiry_alert_days', 'insurance_rate_pct', 'insurance_min_fcfa', 'insurance_max_value_fcfa', 'uninsured_cap_fcfa');
+                 'expiry_alert_days', 'insurance_rate_pct', 'insurance_min_fcfa', 'insurance_max_value_fcfa', 'uninsured_cap_fcfa', 'manager_email');
   insert into public.app_config (key, value, updated_at) values ('nexus_logistics_cfg', v_clean, now())
   on conflict (key) do update set value = app_config.value || excluded.value, updated_at = now();
   perform public.lg_audit('config', 'app_config', 'nexus_logistics_cfg', v_clean);
