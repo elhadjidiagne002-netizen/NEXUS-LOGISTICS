@@ -29,7 +29,7 @@ Mode réel : copier `.env.example` en `.env` et renseigner `VITE_SUPABASE_URL` e
 npm test
 ```
 
-54 tests : parcours complet en SQL, droits réels sous les rôles `anon` et
+83 tests : parcours complet en SQL, droits réels sous les rôles `anon` et
 `authenticated`, scénario de démo, un fichier par cycle d'amélioration, algorithmes.
 
 ## Ce qui est construit
@@ -60,6 +60,22 @@ npm test
 | 4 | Entrepôt : emplacements, rangement, « où est ce produit ? », chemin de prélèvement, préparation par vague avec bacs, inventaire tournant à l'aveugle |
 | 5 | Prévision de volume et de véhicules (jours de pic) · détection d'anomalies · classement et prime de ponctualité des chauffeurs · contrôle des retours (remise en vente / vendeur / rebut) · livraison à un tiers |
 
+### Fonctions P2 ajoutées le 08/10/2026 (cycles 6 à 14)
+| Cycle | Contenu | Où |
+|---|---|---|
+| 6 | **Lots et péremption** : rangement par lot et date, prélèvement « premier périmé, premier sorti », sortie de stock motivée, **traçabilité pour rappel produit** (qui a reçu le lot X) ; lots du vendeur dans son espace | `/entrepot` → Péremption, `/vendeur` |
+| 7 | **Productivité de la préparation** : lignes par heure, mauvais scans, écarts au double contrôle, ruptures par vendeur, emballages consommés | `/entrepot` → Productivité, `/analytique` → Préparation |
+| 8 | **Retours : frais et causes** : cause suggérée au contrôle, qui paie et combien (réglable), statistiques par motif / vendeur / quartier | `/quai` → Retours, `/analytique` → Retours |
+| 9 | **Engagement de délai des vendeurs** : délai promis qui fixe l'heure limite, relances WhatsApp avant échéance et en retard, ponctualité | `/vendeur` → Mon engagement, `/analytique` → Vendeurs |
+| 10 | **Suppléments nuit et forte pluie** au devis (désactivés par défaut) ; la pluie se déclare depuis la tour de contrôle | `/tour`, `/admin` → Tarifs |
+| 11 | **Plusieurs quais** : arrivée du véhicule, file d'attente, affectation d'un quai, temps moyens de chargement et d'attente | `/quai` → Quais, app chauffeur |
+| 12 | **Tableaux par axe** (zone, vendeur, chauffeur, véhicule, jour, heure) et **export Excel** | `/analytique` → Indicateurs |
+| 13 | **Coûts** : par véhicule (au km, par colis), marge par zone, coût des échecs | `/analytique` → Coûts |
+| 14 | **Assurance colis** (prime au devis, plafond d'indemnisation), **avoir** de l'indemnité, **accord du client** depuis sa page de suivi | `/sav` → Incidents, `/suivi/:jeton` |
+
+Les montants proposés (frais par cause de retour, plafond sans assurance, prime, suppléments)
+sont des valeurs de départ **à valider** ; tous sont réglables dans l'administration.
+
 ## Organisation
 
 ```
@@ -79,4 +95,6 @@ test/                  node --test
 Voir `CLAUDE.md` (« Mise en production »). En résumé : appliquer les migrations sur une
 **branche de test Supabase**, rejouer une journée, puis la prod ; déployer l'app sur
 Cloudflare Pages ; brancher l'envoi des messages `lg_*` de `notification_outbox` et la
-veille `lg_watchdog()` dans le planificateur existant.
+veille `lg_watchdog()` (et `lg_vendor_reminders()`) dans le planificateur existant.
+La CI « Vérification » lance les tests et la construction sur toute branche et pull request ;
+le déploiement ne part que de `main`.
