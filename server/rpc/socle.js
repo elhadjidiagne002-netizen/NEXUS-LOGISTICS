@@ -32,6 +32,7 @@ export default {
       const hubs = await hubsOf(ctx);
       const byId = Object.fromEntries(hubs.map((h) => [h.id, h.name]));
       const c = ctx.company;
+      const loc = await ctx.db.prepare('SELECT address, lat, lng FROM members WHERE company_id = ? AND user_id = ?').bind(ctx.company.id, ctx.user.id).first();
       const companies = (await ctx.db.prepare(
         'SELECT c.id, c.name FROM members m JOIN companies c ON c.id = m.company_id WHERE m.user_id = ? AND c.suspended_at IS NULL ORDER BY m.created_at',
       ).bind(ctx.user.id).all()).results;
@@ -44,6 +45,7 @@ export default {
         hubs,
         company: { id: c.id, name: c.name, slug: c.slug, kind: c.kind, city: c.city, phone: c.phone, plan: c.plan, plan_until: c.plan_until },
         companies,
+        location: loc ?? null,   // adresse de collecte (vendeur)
         config: { max_attempts: c.config.max_attempts, require_photo: c.config.require_photo, proof_radius_m: c.config.proof_radius_m, heavy_kg: c.config.heavy_kg },
       };
     },
@@ -176,9 +178,12 @@ export default {
     async handler(ctx) {
       const r = await ctx.db.prepare(
         `SELECT id, user_id, name, phone, vehicle_kind AS vehicle_type, CASE WHEN active = 1 THEN 'active' ELSE 'inactive' END AS status,
-                last_seen_at FROM couriers WHERE company_id = ? AND active = 1 ORDER BY name`,
+                last_seen_at, license_expires_at,
+                EXISTS (SELECT 1 FROM trips t WHERE t.courier_id = couriers.id AND t.status IN ('planned', 'loading', 'sealed', 'in_progress', 'completed')) AS busy
+           FROM couriers WHERE company_id = ? AND active = 1 ORDER BY name`,
       ).bind(ctx.company.id).all();
-      return r.results.map((c) => ({ ...c, busy: false }));
+      // occupé = voyage ouvert ou pas encore clôturé en caisse
+      return r.results.map((c) => ({ ...c, busy: Boolean(c.busy) }));
     },
   },
 

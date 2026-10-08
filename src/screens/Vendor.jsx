@@ -1,7 +1,8 @@
 // Module 09 — Espace vendeur : suivre ses colis sans appeler, compléter ses fiches (code, poids, taille),
 // voir ses lots qui périment à l'entrepôt.
 import React, { useState } from 'react';
-import { rpc } from '../lib/backend.js';
+import { rpc, MODE } from '../lib/backend.js';
+import { useMe } from '../App.jsx';
 import { VendorStatement } from '../components/statement.jsx';
 import { useRpc, useAction, useNav, Btn, Card, Badge, Empty, Loading, ErrorBox, PageHead, Stat, Tabs, Chips, StatusBadge, HANDLING, ago } from '../components/ui.jsx';
 
@@ -139,6 +140,7 @@ function Dropoff() {
   if (error) return <ErrorBox error={error} />;
   const when = (x) => `${new Date(x.day + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })} · ${x.start.slice(0, 5)}–${x.end.slice(0, 5)}`;
   return <div className="stack">
+    {MODE === 'api' && <PickupAddress />}
     <Card><h3>Mes colis prêts : {d.ready_packages}</h3>
       {d.booking ? <><div className="flash ok"><div>Dépôt prévu <b>{when(d.booking)}</b> au {d.booking.hub} · {d.booking.packages} colis</div></div>
         <div className="row" style={{ marginTop: 8 }}><Btn kind="ghost" disabled={busy} onClick={() => run(async () => { const r = await rpc('lg_dropoff_cancel', { p_booking: d.booking.id }); reload(); return r; }, { ok: 'Dépôt annulé : un chauffeur viendra collecter' })}>Annuler le dépôt</Btn></div></>
@@ -148,4 +150,17 @@ function Dropoff() {
         <Btn size="sm" kind="primary" disabled={busy || !d.ready_packages} onClick={() => run(async () => { const r = await rpc('lg_dropoff_book', { p_slot: s.id }); reload(); return r; }, { ok: 'Dépôt réservé' })}>{d.booking ? 'Choisir plutôt' : 'Réserver'}</Btn></div>)}</div>}
       {!d.ready_packages && <p className="small muted">Préparez et posez d'abord vos colis « prêts » pour réserver un dépôt.</p>}</Card>
   </div>;
+}
+
+// Adresse où le chauffeur vient collecter les colis prêts (version complète)
+function PickupAddress() {
+  const me = useMe();
+  const [f, setF] = useState({ address: me.location?.address ?? '', lat: me.location?.lat ?? null, lng: me.location?.lng ?? null });
+  const [run, busy] = useAction();
+  const here = () => navigator.geolocation?.getCurrentPosition((p) => setF({ ...f, lat: p.coords.latitude, lng: p.coords.longitude }), () => {}, { enableHighAccuracy: true, timeout: 8000 });
+  return <Card><h3>Adresse de collecte</h3>
+    <div className="row"><input className="input" style={{ flex: 1 }} placeholder="Adresse, repère" value={f.address} onChange={(e) => setF({ ...f, address: e.target.value })} />
+      <Btn onClick={here}>{f.lat != null ? 'Position enregistrée ✔' : 'Ma position'}</Btn>
+      <Btn kind="primary" disabled={busy} onClick={() => run(async () => rpc('lg_member_location', { p_address: f.address || null, p_lat: f.lat, p_lng: f.lng }), { ok: 'Adresse enregistrée' })}>Enregistrer</Btn></div>
+    <p className="small muted" style={{ margin: '6px 0 0' }}>Le chauffeur qui collecte vos colis prêts vient ici.</p></Card>;
 }

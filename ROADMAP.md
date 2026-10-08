@@ -65,18 +65,26 @@ l'aperçu (`logistics-full`), migrations D1 appliquées en ligne, déploiement d
 - Reste : migration `0003` à appliquer en ligne ; messages au client (rupture, commande préparée) au C8 ; avoir sur
   rupture remboursée au C6.
 
-## C4 — Flotte, quai et voyages
-- [ ] Véhicules, documents, entretien au km, contrôle avant départ (`lg_fleet`, `lg_upsert_vehicle`,
-      `lg_add_document`, `lg_log_maintenance`, `lg_vehicle_check`, `lg_set_vehicle_status`).
-- [ ] Créneaux de livraison choisis par le client (`lg_create_slots`, `lg_slots_available`, `lg_track_book_slot`),
-      pas portés au C2.
-- [ ] Voyages : création, ajout/retrait/ordre des arrêts, chargement contrôlé (poids, volume, colis, froid),
-      scellé, plusieurs quais et file d'attente, collectes vendeurs, retours, transferts, créneaux de dépôt
-      (`lg_trip_*`, `lg_dock_*`, `lg_dropoff_*`). Numéros de voyage sans trou (`nextCounter`).
-- [ ] Planification automatique et suggestions (`lg_autoplan_run`, `lg_suggest_trips`) — algorithme en JS
-      (`src/lib/algo.js` existe déjà côté client).
+## C4 — Flotte, quai et voyages ✅ (08/10/2026)
+- [x] Migration `0004_voyages.sql` : véhicules, documents, carnet d'entretien et contrôles, voyages, arrêts, colis par
+      voyage, quais, créneaux de dépôt vendeur, créneaux de livraison client, alertes ; colonnes chauffeur (permis,
+      plafond d'espèces, note), adresse de collecte d'un membre, créneau d'une commande.
+- [x] Véhicules, documents, entretien au km (alerte bientôt / dépassé), contrôle avant départ (`lg_fleet`,
+      `lg_upsert_vehicle`, `lg_add_document`, `lg_log_maintenance`, `lg_vehicle_check`, `lg_set_vehicle_status`).
+- [x] Voyages : création (documents, permis, véhicule et chauffeur libres — index uniques), ajout/retrait/ordre des
+      arrêts, chargement contrôlé (poids, volume, colis, froid, vivant, alimentaire/chimique), plan de chargement
+      calculé à la lecture, bordereau signé, heures estimées, quais et file d'attente, collectes vendeurs, réception
+      au hub, dépôts vendeurs, créneaux client (`lg_trip_*`, `lg_dock_*`, `lg_dropoff_*`, `lg_receive`,
+      `lg_create_slots`, `lg_slots_available`, `lg_track_book_slot`). Numéros de voyage sans trou.
+- [x] Planification automatique et suggestions (`lg_autoplan_run`, `lg_suggest_trips`). 10 tests serveur.
+- Reste : migration `0004` à appliquer en ligne ; retours (`lg_return_*`) et transferts entre voyages
+      (`lg_transfer_stop`, `lg_take_transfer`) déplacés au C5 (ils suivent les échecs de livraison) ; frais de route
+      dans les coûts de la flotte au C5.
 
 ## C5 — Livraison sur le terrain
+- [ ] Retours (`lg_returns_expected`, `lg_returns_to_inspect`, `lg_return_causes`, `lg_return_classify`,
+      `lg_return_inspect`, `lg_return_hub`, `lg_return_vendor`, `lg_returns_pending`, `lg_trip_add_return`) et
+      transferts entre voyages (`lg_transfer_stop`, `lg_take_transfer`), venus du C4 ; `lg_collect` (collecte).
 - [ ] App chauffeur : arrêts, appel client, arrivée (manuelle et automatique GPS), code client (OTP) avec
       essais décomptés **sans exception** (le refus laisse une trace), signature, échec et présentations.
 - [ ] **Photos de preuve sur R2** (bucket `nexus-logistics-preuves`, privé, chemin préfixé par l'entreprise),

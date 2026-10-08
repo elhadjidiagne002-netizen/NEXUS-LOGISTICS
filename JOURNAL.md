@@ -2,6 +2,18 @@
 
 Le plus récent en premier.
 
+## 08/10/2026 — Cycle C4 (Cloudflare) : flotte, quai et voyages
+- **Fait** : `migrations/0004_voyages.sql` ; modules `server/rpc/flotte.js` (véhicules, documents, entretien au km,
+  contrôle avant départ, alertes, adresse de collecte) et `voyages.js` (voyages, arrêts, chargement contrôlé,
+  bordereau, heures estimées, quais, collectes, réception, dépôts vendeurs, créneaux client, suggestions,
+  planification automatique). Espace vendeur : « Adresse de collecte ».
+- **Choix (budget D1)** : le plan de chargement (fond / milieu / porte, ordre) n'est plus stocké mais calculé à la
+  lecture — la version Postgres réécrivait tous les colis du voyage à chaque scan. Un véhicule et un chauffeur
+  n'ont qu'un voyage ouvert : index uniques partiels (sûr même en cas de double clic).
+- **État** : 42 tests serveur, 12 unitaires, builds OK ; Quai (création, chargement, jauge) et Flotte vérifiés
+  dans Chromium. Retours et transferts déplacés au C5.
+- **À appliquer en ligne** : `npx wrangler d1 migrations apply nexus-logistics --remote` → `0004_voyages.sql`.
+
 ## 08/10/2026 — Cycle C3 (Cloudflare) : préparation et entrepôt
 - **Fait** : `migrations/0003_preparation.sql` ; modules `server/rpc/preparation.js` (file, prise, scans, rupture,
   colisage, mise à quai, étiquettes, double contrôle, vagues, productivité), `entrepot.js` (emplacements, rangement

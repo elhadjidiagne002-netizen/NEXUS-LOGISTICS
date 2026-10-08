@@ -20,8 +20,10 @@ import commandes from './commandes.js';
 import suivi from './suivi.js';
 import preparation from './preparation.js';
 import entrepot from './entrepot.js';
+import flotte from './flotte.js';
+import voyages from './voyages.js';
 
-export const REGISTRY = { ...socle, ...tarifs, ...commandes, ...suivi, ...preparation, ...entrepot };
+export const REGISTRY = { ...socle, ...tarifs, ...commandes, ...suivi, ...preparation, ...entrepot, ...flotte, ...voyages };
 
 
 async function buildContext(request, env) {
