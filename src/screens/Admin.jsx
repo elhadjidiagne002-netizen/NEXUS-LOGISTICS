@@ -2,16 +2,18 @@
 import React, { useState } from 'react';
 import { rpc, MODE } from '../lib/backend.js';
 import { useMe, ROLE_FR } from '../App.jsx';
+import { errText } from '../lib/errors.js';
 import { Icon, useRpc, useAction, Btn, Card, Badge, Empty, Loading, ErrorBox, PageHead, Modal, Field, Tabs, Chips, StatusBadge, formatF, dmy } from '../components/ui.jsx';
 
 export default function Admin() {
   const me = useMe();
   const [tab, setTab] = useState(me.is_admin ? 'staff' : 'fleet');
-  const tabs = me.is_admin ? [['staff', 'Rôles'], ['fleet', 'Flotte'], ['pricing', 'Tarifs et zones'], ['devices', 'Appareils'], ['config', 'Réglages']] : [['fleet', 'Flotte']];
+  const tabs = me.is_admin ? [['staff', 'Rôles'], ['fleet', 'Flotte'], ['pricing', 'Tarifs et zones'], ['devices', 'Appareils'], ['config', 'Réglages'],
+    ...(MODE === 'api' ? [['api', 'API boutiques']] : [])] : [['fleet', 'Flotte']];
   return <>
     <PageHead title="Administration" back="/" />
     <Tabs tabs={tabs} value={tab} onChange={setTab} />
-    {tab === 'staff' && <Staff />}{tab === 'fleet' && <Fleet />}{tab === 'pricing' && <Pricing />}{tab === 'config' && <Config />}{tab === 'devices' && <Devices />}
+    {tab === 'staff' && <Staff />}{tab === 'fleet' && <Fleet />}{tab === 'pricing' && <Pricing />}{tab === 'config' && <Config />}{tab === 'devices' && <Devices />}{tab === 'api' && <ApiKeys />}
   </>;
 }
 
@@ -155,14 +157,17 @@ function MaintForm({ v, onDone }) {
 function Pricing() {
   const { data, error, loading, reload } = useRpc('lg_pricing', {});
   const [run] = useAction();
-  const [rc, setRc] = useState({ zone: '', vehicle_kind: '', max_weight_g: 20, price_fcfa: '', lead_hours: 24, service: 'standard' });
-  const [quote, setQuote] = useState({ zone: 'Rufisque', kg: 3, sub: 20000 }); const [qr, setQr] = useState(null);
+  const [rc, setRc] = useState({ zone: '', vehicle_kind: '', max_weight_g: 20, price_fcfa: '', per_km_fcfa: '', lead_hours: 24, service: 'standard' });
+  const [quote, setQuote] = useState({ zone: '', kg: 3, sub: 20000 }); const [qr, setQr] = useState(null);
   if (loading && !data) return <Loading />;
+  if (!data) return <ErrorBox error={error} />;
+  const qZone = quote.zone || data.zones[0]?.name || '';
   return <div className="stack"><ErrorBox error={error} />
+    {MODE === 'api' && <NewZone empty={!data.zones.length} reload={reload} />}
     <div className="split">
       <Card><h3>Grille de prix</h3><div className="scroll-x"><table className="tbl"><thead><tr><th>Service</th><th>Zone</th><th>Véhicule</th><th className="num">Jusqu'à</th><th className="num">Prix</th><th className="num">Délai</th><th></th></tr></thead>
         <tbody>{data.rate_cards.map((r) => <tr key={r.id}><td>{r.service}</td><td>{r.zone ?? 'toutes'}</td><td>{r.vehicle_kind ?? 'tous'}</td><td className="num">{r.max_weight_g / 1000} kg</td>
-          <td className="num">{formatF(r.price_fcfa)}</td><td className="num">{r.lead_hours} h</td>
+          <td className="num">{formatF(r.price_fcfa)}{r.per_km_fcfa ? ` + ${formatF(r.per_km_fcfa)}/km` : ''}</td><td className="num">{r.lead_hours} h</td>
           <td><Btn size="sm" kind="ghost" onClick={() => run(async () => { await rpc('lg_upsert_rate_card', { p: { id: r.id, active: false } }); reload(); })}>✕</Btn></td></tr>)}</tbody></table></div>
         <div className="grid cols-3" style={{ marginTop: 10 }}>
           <select className="input" value={rc.service} onChange={(e) => setRc({ ...rc, service: e.target.value })}><option>standard</option><option>express</option><option>programme</option></select>
@@ -170,17 +175,18 @@ function Pricing() {
           <select className="input" value={rc.vehicle_kind} onChange={(e) => setRc({ ...rc, vehicle_kind: e.target.value })}><option value="">tous véhicules</option>{KINDS.map((k) => <option key={k}>{k}</option>)}</select>
           <input className="input" inputMode="numeric" placeholder="jusqu'à (kg)" value={rc.max_weight_g} onChange={(e) => setRc({ ...rc, max_weight_g: e.target.value })} />
           <input className="input" inputMode="numeric" placeholder="prix (F)" value={rc.price_fcfa} onChange={(e) => setRc({ ...rc, price_fcfa: e.target.value })} />
-          <input className="input" inputMode="numeric" placeholder="délai (h)" value={rc.lead_hours} onChange={(e) => setRc({ ...rc, lead_hours: e.target.value })} /></div>
+          <input className="input" inputMode="numeric" placeholder="délai (h)" value={rc.lead_hours} onChange={(e) => setRc({ ...rc, lead_hours: e.target.value })} />
+          {MODE === 'api' && <input className="input" inputMode="numeric" placeholder="+ prix au km (F, facultatif)" value={rc.per_km_fcfa} onChange={(e) => setRc({ ...rc, per_km_fcfa: e.target.value.replace(/\D/g, '') })} />}</div>
         <Btn kind="primary" style={{ marginTop: 8 }} disabled={!rc.price_fcfa} onClick={() => run(async () => {
-          await rpc('lg_upsert_rate_card', { p: { ...rc, max_weight_g: Number(rc.max_weight_g) * 1000, price_fcfa: Number(rc.price_fcfa), lead_hours: Number(rc.lead_hours) } }); reload();
+          await rpc('lg_upsert_rate_card', { p: { ...rc, max_weight_g: Number(rc.max_weight_g) * 1000, price_fcfa: Number(rc.price_fcfa), lead_hours: Number(rc.lead_hours), per_km_fcfa: Number(rc.per_km_fcfa) || 0 } }); reload();
         }, { ok: 'Tarif ajouté' })}>Ajouter le tarif</Btn></Card>
       <Card><h3>Simulateur (prix au panier)</h3><div className="grid cols-3">
-        <select className="input" value={quote.zone} onChange={(e) => setQuote({ ...quote, zone: e.target.value })}>{data.zones.map((z) => <option key={z.name}>{z.name}</option>)}</select>
+        <select className="input" value={qZone} onChange={(e) => setQuote({ ...quote, zone: e.target.value })}>{data.zones.map((z) => <option key={z.name}>{z.name}</option>)}</select>
         <input className="input" inputMode="decimal" value={quote.kg} onChange={(e) => setQuote({ ...quote, kg: e.target.value })} aria-label="Poids kg" />
         <input className="input" inputMode="numeric" value={quote.sub} onChange={(e) => setQuote({ ...quote, sub: e.target.value })} aria-label="Montant panier" /></div>
-        <Btn style={{ marginTop: 8 }} onClick={async () => setQr(await rpc('lg_quote', { p_zone: quote.zone, p_weight_g: Math.round(Number(quote.kg) * 1000), p_subtotal_fcfa: Number(quote.sub) }))}>Calculer</Btn>
-        {qr && (qr.ok ? <div className="flash ok" style={{ marginTop: 8 }}><div><b className="big">{formatF(qr.price_fcfa)}</b> {qr.free && '(offerte)'} · {qr.vehicle_kind}{qr.surcharges?.length ? ` · dont ${qr.surcharges.map((s) => `${s.label.toLowerCase()} ${formatF(s.amount_fcfa)}`).join(', ')}` : ''}<div className="small">promis le {dmy(qr.promised_at)}</div></div></div>
-          : <div className="flash bad" style={{ marginTop: 8 }}>{qr.error}</div>)}
+        <Btn style={{ marginTop: 8 }} onClick={async () => setQr(await rpc('lg_quote', { p_zone: qZone, p_weight_g: Math.round(Number(quote.kg) * 1000), p_subtotal_fcfa: Number(quote.sub) }))}>Calculer</Btn>
+        {qr && (qr.ok ? <div className="flash ok" style={{ marginTop: 8 }}><div><b className="big">{formatF(qr.price_fcfa)}</b>{qr.distance_km != null ? ` · ${qr.distance_km} km` : ''} {qr.free && '(offerte)'} · {qr.vehicle_kind}{qr.surcharges?.length ? ` · dont ${qr.surcharges.map((s) => `${s.label.toLowerCase()} ${formatF(s.amount_fcfa)}`).join(', ')}` : ''}<div className="small">promis le {dmy(qr.promised_at)}</div></div></div>
+          : <div className="flash bad" style={{ marginTop: 8 }}>{errText(qr.error)}</div>)}
         <p className="small muted">Fonction publique <span className="mono">lg_quote</span> : le site peut l'appeler au panier, avant paiement.</p></Card>
     </div>
     <Surcharges zones={data.zones} />
@@ -223,7 +229,8 @@ function ZoneRow({ z, reload }) {
   return <tr><td>{z.name}</td><td>{z.city}</td><td><input type="checkbox" checked={f.served} onChange={(e) => s('served', e.target.checked)} /></td>
     <td><input className="input" style={{ minHeight: 36, width: 110 }} type="time" value={String(f.cutoff_time).slice(0, 5)} onChange={(e) => s('cutoff_time', e.target.value)} /></td>
     <td><input className="input" style={{ minHeight: 36, width: 110 }} inputMode="numeric" value={f.free_above_fcfa ?? ''} onChange={(e) => s('free_above_fcfa', e.target.value)} /></td>
-    <td>{dirty && <Btn size="sm" kind="primary" onClick={() => run(async () => { await rpc('lg_set_zone', { p_zone: z.name, p: { served: f.served, cutoff_time: f.cutoff_time, free_above_fcfa: f.free_above_fcfa ? Number(f.free_above_fcfa) : null, delivery_days: f.delivery_days } }); setDirty(false); reload(); }, { ok: 'Zone mise à jour' })}>OK</Btn>}</td></tr>;
+    <td>{dirty && <Btn size="sm" kind="primary" onClick={() => run(async () => { await rpc('lg_set_zone', { p_zone: z.name, p: { served: f.served, cutoff_time: f.cutoff_time, free_above_fcfa: f.free_above_fcfa ? Number(f.free_above_fcfa) : null, delivery_days: f.delivery_days } }); setDirty(false); reload(); }, { ok: 'Zone mise à jour' })}>OK</Btn>}
+      {MODE === 'api' && !dirty && <Btn size="sm" kind="ghost" title="Supprimer la zone" onClick={() => { if (confirm(`Supprimer la zone ${z.name} ?`)) run(async () => { const r = await rpc('lg_zone_delete', { p_zone: z.name }); reload(); return r; }, { ok: 'Zone supprimée' }); }}>✕</Btn>}</td></tr>;
 }
 
 const CFG = [['max_attempts', 'Présentations avant retour vendeur'], ['proof_radius_m', 'Rayon de validation (m)'], ['cash_limit_fcfa', 'Plafond d\'espèces par chauffeur (F)'],
@@ -289,5 +296,53 @@ function Devices() {
               : !d.this_device && <Btn size="sm" kind="bad" disabled={busy} onClick={() => confirm(`Bloquer « ${d.label ?? 'cet appareil'} » de ${d.user} ? Plus rien ne passera depuis ce téléphone.`)
                 && act2('lg_device_block', { p_id: d.id, p_blocked: true }, 'Appareil bloqué')}>Bloquer</Btn>}</div></td></tr>)}</tbody></table></div>}</Card>
     <p className="small muted">Téléphone perdu ou volé : <b>Bloquer</b> — plus aucune action n'est acceptée depuis lui, même connecté. <b>Déconnecter</b> coupe la session en cours ; la personne se reconnecte avec son mot de passe.</p>
+  </div>;
+}
+
+// Version complète : chaque entreprise a ses propres zones (quartiers). Démarrage rapide : quartiers de Dakar.
+function NewZone({ empty, reload }) {
+  const [f, setF] = useState({ name: '', city: '', lat: '', lng: '' }); const [run, busy] = useAction();
+  return <Card kind={empty ? 'todo' : ''}><h3>{empty ? 'Aucune zone de livraison' : 'Ajouter une zone'}</h3>
+    {empty && <div className="row" style={{ marginBottom: 10 }}><Btn kind="primary" disabled={busy} onClick={() => run(async () => { const r = await rpc('lg_zones_seed', {}); reload(); return r; }, { ok: 'Quartiers de Dakar ajoutés' })}>Ajouter les quartiers de Dakar et environs</Btn>
+      <span className="small muted">42 zones, modifiables ensuite.</span></div>}
+    <div className="grid cols-3"><input className="input" placeholder="Nom (quartier, ville…)" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
+      <input className="input" placeholder="Ville" value={f.city} onChange={(e) => setF({ ...f, city: e.target.value })} />
+      <input className="input" inputMode="decimal" placeholder="Latitude du centre" value={f.lat} onChange={(e) => setF({ ...f, lat: e.target.value })} />
+      <input className="input" inputMode="decimal" placeholder="Longitude du centre" value={f.lng} onChange={(e) => setF({ ...f, lng: e.target.value })} /></div>
+    <p className="small muted">Le centre sert à reconnaître la zone d'une position GPS (page de suivi) et au prix au km.</p>
+    <Btn disabled={busy || !f.name.trim()} onClick={() => run(async () => {
+      const r = await rpc('lg_set_zone', { p_zone: f.name, p: { city: f.city || null, lat: f.lat ? Number(f.lat.replace(',', '.')) : null, lng: f.lng ? Number(f.lng.replace(',', '.')) : null } });
+      setF({ name: '', city: '', lat: '', lng: '' }); reload(); return r;
+    }, { ok: 'Zone ajoutée' })}>Ajouter la zone</Btn></Card>;
+}
+
+// Clés d'API : les boutiques en ligne envoient leurs commandes payées (POST /api/v1/orders)
+function ApiKeys() {
+  const { data, error, reload } = useRpc('lg_api_keys_list', {});
+  const [name, setName] = useState(''); const [created, setCreated] = useState(null); const [run, busy] = useAction();
+  return <div className="split">
+    <Card><h3>Clés d'API</h3><ErrorBox error={error} />
+      {!data?.length ? <Empty>Aucune clé.</Empty> : <div className="list">{data.map((k) => <div key={k.id} className="line" style={{ opacity: k.revoked_at ? .5 : 1 }}>
+        <span className="grow"><b>{k.name}</b> <span className="mono small">{k.prefix}…</span><div className="small muted">créée le {dmy(k.created_at)}{k.last_used_at ? ` · utilisée le ${dmy(k.last_used_at)}` : ' · jamais utilisée'}{k.revoked_at ? ' · révoquée' : ''}</div></span>
+        {!k.revoked_at && <Btn size="sm" kind="bad" onClick={() => { if (confirm(`Révoquer la clé « ${k.name} » ? Le site qui l'utilise ne pourra plus envoyer de commande.`)) run(async () => { const r = await rpc('lg_api_key_revoke', { p_id: k.id }); reload(); return r; }, { ok: 'Clé révoquée' }); }}>Révoquer</Btn>}</div>)}</div>}
+      <div className="row" style={{ marginTop: 10 }}><input className="input" style={{ flex: 1 }} placeholder="Nom (ex. site WooCommerce)" value={name} onChange={(e) => setName(e.target.value)} />
+        <Btn kind="primary" disabled={busy} onClick={() => run(async () => { const r = await rpc('lg_api_key_create', { p_name: name || null }); setCreated(r); setName(''); reload(); return r; })}>Créer une clé</Btn></div>
+      {created && <div className="flash todo" style={{ marginTop: 10 }}><div><b>Copiez cette clé maintenant</b> : elle ne sera plus jamais affichée.
+        <div className="mono small" style={{ wordBreak: 'break-all', margin: '6px 0' }}>{created.key}</div>
+        <Btn size="sm" onClick={() => navigator.clipboard?.writeText(created.key)}>Copier</Btn></div></div>}</Card>
+    <Card><h3>Brancher une boutique en ligne</h3>
+      <p className="small">Depuis le serveur de la boutique (jamais depuis le navigateur du client) :</p>
+      <pre className="mono small" style={{ whiteSpace: 'pre-wrap' }}>{`POST ${location.origin}/api/v1/orders
+Authorization: Bearer nxl_…
+Content-Type: application/json
+
+{ "external_ref": "WC-1001",
+  "customer": { "name": "Aminata Diop", "phone": "771234567",
+                "address": "Villa 12, Mermoz", "landmark": "face pharmacie" },
+  "zone": "Mermoz",
+  "items": [{ "name": "Huile 5 L", "quantity": 2, "unit_price_fcfa": 6000, "weight_g": 5000 }],
+  "payment_method": "prepaid" }`}</pre>
+      <p className="small muted">Réponse : numéro de commande, frais de livraison, lien de suivi à transmettre au client. Renvoyer la même external_ref ne crée pas de doublon.
+        Jusqu'à 50 commandes par envoi avec {'{ "orders": [ … ] }'}. Devis au panier : fonction publique lg_quote avec p_company = adresse publique de l'entreprise.</p></Card>
   </div>;
 }

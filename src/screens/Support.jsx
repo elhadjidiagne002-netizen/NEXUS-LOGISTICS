@@ -1,7 +1,8 @@
 // Modules 06/13 — Service client : confirmations à appeler, demandes des clients,
 // incidents, fiche colis (chaîne de garde : « chez qui était-il ? » en une requête).
 import React, { useState } from 'react';
-import { rpc } from '../lib/backend.js';
+import { rpc, MODE } from '../lib/backend.js';
+import { Orders, Catalogue } from '../components/orders.jsx';
 import { Icon, useRpc, useAction, useNav, Btn, Card, Badge, Empty, Loading, ErrorBox, PageHead, Modal, Field, Tabs, Chips, StatusBadge,
   formatF, hhmm, dmy, ago } from '../components/ui.jsx';
 
@@ -12,10 +13,14 @@ const EV = { pack: 'Emballé', stage: 'Mis à quai', load: 'Chargé', unload: 'D
   return_vendor: 'Rendu au vendeur', receive: 'Reçu', inventory: 'Inventaire', damage: 'Dommage' };
 
 export default function Support({ code }) {
-  const [tab, setTab] = useState(code ? 'package' : 'confirm');
+  // version complète (Cloudflare) : les commandes naissent ici (saisie, fichier, API des boutiques)
+  const api = MODE === 'api';
+  const [tab, setTab] = useState(code ? 'package' : api ? 'orders' : 'confirm');
   return <>
     <PageHead title="Service client" back="/" />
-    <Tabs value={tab} onChange={setTab} tabs={[['confirm', 'À confirmer'], ['requests', 'Demandes'], ['incidents', 'Incidents'], ['package', 'Fiche colis']]} />
+    <Tabs value={tab} onChange={setTab} tabs={[...(api ? [['orders', 'Commandes']] : []), ['confirm', 'À confirmer'], ['requests', 'Demandes'],
+      ...(api ? [['catalogue', 'Produits']] : []), ['incidents', 'Incidents'], ['package', 'Fiche colis']]} />
+    {tab === 'orders' && <Orders />}{tab === 'catalogue' && <Catalogue />}
     {tab === 'confirm' && <Confirm />}{tab === 'requests' && <Requests />}{tab === 'incidents' && <Incidents />}{tab === 'package' && <PackageCard initial={code} />}
   </>;
 }

@@ -35,19 +35,21 @@ class Stmt {
     return { success: true, results: [], meta: { changes: Number(r.changes), last_row_id: Number(r.lastInsertRowid) } };
   }
   async first(col) {
+    this.d1.calls++;
     const row = this._stmt().get(...this.params);
     if (!row) return null;
     return col ? row[col] : { ...row };
   }
-  async all() { return this._exec(); }
-  async run() { return this._exec(); }
+  async all() { this.d1.calls++; return this._exec(); }
+  async run() { this.d1.calls++; return this._exec(); }
 }
 
 export class D1Mock {
   constructor(path = ':memory:') {
     this.db = new DatabaseSync(path);
     this.db.exec('PRAGMA foreign_keys = ON;');
-    this.queries = 0;
+    this.queries = 0; // instructions exécutées
+    this.calls = 0;   // allers-retours vers D1 (un lot env.DB.batch compte pour un)
     this.db.exec('CREATE TABLE IF NOT EXISTS _migrations (name TEXT PRIMARY KEY)');
     for (const f of readdirSync(migrationsDir).filter((x) => x.endsWith('.sql')).sort()) {
       if (this.db.prepare('SELECT 1 FROM _migrations WHERE name = ?').get(f)) continue;
@@ -57,6 +59,7 @@ export class D1Mock {
   }
   prepare(sql) { return new Stmt(this, sql); }
   async batch(stmts) {
+    this.calls++;
     this.db.exec('BEGIN');
     try {
       const out = stmts.map((s) => s._exec());

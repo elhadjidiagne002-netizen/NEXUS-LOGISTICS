@@ -15,8 +15,11 @@ import { currentSession, now } from '../auth.js';
 import { companyConfig } from '../config.js';
 import { RpcFail, hasRole } from './core.js';
 import socle from './socle.js';
+import tarifs from './tarifs.js';
+import commandes from './commandes.js';
+import suivi from './suivi.js';
 
-export const REGISTRY = { ...socle };
+export const REGISTRY = { ...socle, ...tarifs, ...commandes, ...suivi };
 
 
 async function buildContext(request, env) {

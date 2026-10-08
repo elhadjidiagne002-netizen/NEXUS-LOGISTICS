@@ -30,7 +30,7 @@ export default function Track({ token }) {
   const o = d.order; const del = d.delivery;
   const current = [...d.steps].reverse().find((s) => s.at)?.key;
   return <div className="app" style={{ maxWidth: 640, paddingTop: 16 }}>
-    <div className="row" style={{ marginBottom: 14 }}><Logo size={36} /><div><b>NEXUS Market</b><div className="small muted">Suivi de commande {o.short}{MODE === 'demo' ? ' · démo' : ''}</div></div></div>
+    <div className="row" style={{ marginBottom: 14 }}><Logo size={36} /><div><b>{d.company?.name ?? 'NEXUS Market'}</b><div className="small muted">Suivi de commande {o.number ? `n° ${o.number}` : o.short}{MODE === 'demo' ? ' · démo' : ''}</div></div></div>
     <div className="hero">
       <div className="small" style={{ color: '#6ee7b7', fontWeight: 600 }}>{o.first_name ? `Bonjour ${o.first_name}` : 'Votre commande'} · {o.vendor}</div>
       <h1 style={{ margin: '6px 0', fontSize: '1.9rem' }}>{o.status === 'delivered' ? 'Livrée' : o.status === 'cancelled' ? 'Commande annulée' : o.status === 'in_transit' ? 'En route'
@@ -63,7 +63,7 @@ export default function Track({ token }) {
       {d.invoice && <Btn block onClick={async () => { const inv = await call('lg_track_invoice', { p_token: token }); if (inv.ok) printInvoice(inv); }}><Icon name="receipt" size={18} />Ma facture {d.invoice.number}</Btn>}
       {o.status !== 'delivered' && o.status !== 'cancelled' && <Btn block onClick={() => setModal('help')}>Changer de jour · être rappelé · aide</Btn>}
     </div>
-    <p className="small muted center" style={{ marginTop: 18 }}>Vendu par {o.vendor} · livré par NEXUS LOGISTICS</p>
+    <p className="small muted center" style={{ marginTop: 18 }}>{o.vendor && o.vendor !== d.company?.name ? `Vendu par ${o.vendor} · ` : ''}livré par {d.company?.name ?? 'NEXUS LOGISTICS'}</p>
     {modal === 'loc' && <Location onClose={() => setModal(null)} onSave={(lat, lng, landmark) => doit('lg_track_set_location', { p_lat: lat, p_lng: lng, p_landmark: landmark }, 'Position enregistrée, merci !')} />}
     {modal === 'help' && <Help onClose={() => setModal(null)} onSend={(kind, payload) => doit('lg_track_request', { p_kind: kind, p_payload: payload }, 'Demande envoyée : nous vous recontactons.')}
       onThirdParty={(name, phone) => doit('lg_track_third_party', { p_name: name, p_phone: phone }, 'C\'est noté : la personne recevra le code de livraison.')} />}

@@ -28,16 +28,26 @@ l'aperçu (`logistics-full`), migrations D1 appliquées en ligne, déploiement d
       carte « Inviter par lien » dans Administration → Rôles.
 - [x] 12 tests serveur dont isolation entre entreprises et refus sans session de TOUTE fonction.
 
-## C2 — Commandes, zones, tarifs, suivi client
-- [ ] Tables `orders`, `order_items`, `products` (catalogue logistique : poids, volume, froid, fragile), clients
-      (nom, téléphone, adresse par repère, position), zones (polygones ou quartiers) et grilles tarifaires.
-- [ ] Saisie d'une commande (écran Service client), import CSV (gabarit), et **API par clé** pour les
-      boutiques en ligne : `POST /api/v1/orders` avec clé d'entreprise (empreinte stockée, révocable).
-- [ ] Portage : `lg_quote` (devis au km ou par zone, suppléments nuit/pluie, assurance), `lg_set_zone`,
-      `lg_upsert_rate_card`, `lg_surcharge_save/declare`, `lg_pricing`, `lg_confirm_cod`,
-      `lg_cancel_unconfirmed`, `lg_order_insure`, `lg_product_logistics`, `lg_product_find`.
-- [ ] Page de suivi publique `/suivi/<jeton>` (`lg_track*`, rôles `public`, jeton secret par commande).
-- [ ] Montants en **FCFA entiers** partout (plus de conversion EUR : ce n'est plus la base NEXUS).
+## C2 — Commandes, zones, tarifs, suivi client ✅ (08/10/2026, routine cloud)
+- [x] Migration `0002_commandes.sql` : `orders`, `order_items`, `products` (catalogue logistique : poids, dimensions,
+      manutention froid/fragile…), `customers` (un par numéro, repère, position), `zones` (centre + polygone facultatif,
+      heure limite, jours, gratuité), `rate_cards` (+ prix au km), `surcharges`, `banned_numbers`, `customer_requests`,
+      `ratings`, `api_keys`. Numéro de commande sans trou (compteur lu dans le même lot que l'insertion).
+- [x] Saisie d'une commande (Service client → Commandes, rejouable `p_event`), import CSV (gabarit, paquets de 50,
+      erreurs par ligne, référence jamais en double), **API par clé** `POST /api/v1/orders` (empreinte SHA-256,
+      révocable, Administration → API boutiques), catalogue (Service client → Produits).
+- [x] Portage : `lg_quote` (public via `p_company` = adresse publique ; par zone ou par position, prix au km,
+      suppléments, assurance), `lg_set_zone` (+ `lg_zone_delete`, `lg_zones_seed` : 42 quartiers de Dakar),
+      `lg_upsert_rate_card`, `lg_surcharges_list`, `lg_surcharge_save/declare`, `lg_pricing`, `lg_confirm_cod`,
+      `lg_cancel_unconfirmed`, `lg_cod_pending`, `lg_order_insure`, `lg_product_logistics`, `lg_products_to_complete`,
+      `lg_product_find`, `lg_vendor_overview` (version C2), `lg_requests_list`, `lg_request_done`, `lg_ban_number`.
+- [x] Page de suivi publique `/suivi/<jeton>` : `lg_track`, `lg_track_confirm`, `lg_track_set_location`,
+      `lg_track_rate`, `lg_track_request`, `lg_track_third_party` (jeton aléatoire 18 octets, nom de l'entreprise).
+- [x] Montants en FCFA entiers partout. 12 tests serveur (dont isolation et rôles) + test unitaire du CSV.
+- Reste : migration `0002` à appliquer en ligne et prévisualisation à vérifier (en local) ; envoi du message de
+  confirmation au client (C8, en attendant : bouton « Envoyer le lien (WhatsApp) ») ; ouverture de la préparation à la
+  confirmation (C3) ; livreur/position/échec/facture sur la page de suivi (C4-C6) ; dessin des polygones de zone sur
+  la carte (aujourd'hui : centre seulement à l'écran, polygone par `lg_set_zone`) ; `lg_track_incidents` (C11).
 
 ## C3 — Préparation et entrepôt
 - [ ] Tâches de préparation, verrou de prise (`pick_lock_minutes`), scan article par article, ruptures,
@@ -49,6 +59,8 @@ l'aperçu (`logistics-full`), migrations D1 appliquées en ligne, déploiement d
 ## C4 — Flotte, quai et voyages
 - [ ] Véhicules, documents, entretien au km, contrôle avant départ (`lg_fleet`, `lg_upsert_vehicle`,
       `lg_add_document`, `lg_log_maintenance`, `lg_vehicle_check`, `lg_set_vehicle_status`).
+- [ ] Créneaux de livraison choisis par le client (`lg_create_slots`, `lg_slots_available`, `lg_track_book_slot`),
+      pas portés au C2.
 - [ ] Voyages : création, ajout/retrait/ordre des arrêts, chargement contrôlé (poids, volume, colis, froid),
       scellé, plusieurs quais et file d'attente, collectes vendeurs, retours, transferts, créneaux de dépôt
       (`lg_trip_*`, `lg_dock_*`, `lg_dropoff_*`). Numéros de voyage sans trou (`nextCounter`).
@@ -93,6 +105,7 @@ l'aperçu (`logistics-full`), migrations D1 appliquées en ligne, déploiement d
       `robots.txt`, `sitemap.xml`, partage social ; suivi des erreurs (remontée maison, Sentry si projet créé).
 
 ## C10 — Intégration NEXUS Market
+- [ ] Lecture de l'état d'une commande par l'API (`GET /api/v1/orders/<référence>`), pour les boutiques.
 - [ ] NEXUS Market devient une entreprise cliente : ses commandes payées arrivent par l'API par clé (C2),
       les statuts de livraison repartent vers NEXUS par un appel signé (HMAC).
 - [ ] Côté dépôt `nexus-market` : brancher l'envoi des commandes, et retirer ou adapter `lg-fallback.js`

@@ -44,3 +44,26 @@ export async function nextCounter(ctx, key) {
   ).bind(ctx.company.id, key).first();
   return r.n;
 }
+
+// ----------------------------------------------------------------- petites aides partagées par les modules
+/** Texte nettoyé et tronqué, ou null. */
+export const text = (v, max = 200) => (v == null || String(v).trim() === '' ? null : String(v).trim().slice(0, max));
+/** Nombre fini, ou null. */
+export const num = (v) => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
+/** Entier (arrondi), ou null. */
+export const int = (v) => (num(v) == null ? null : Math.round(Number(v)));
+export const uuid = () => crypto.randomUUID();
+/** Clé de téléphone : 9 derniers chiffres (+221 77… et 77… sont le même client). */
+export const phoneKey = (p) => { const d = String(p ?? '').replace(/\D/g, ''); return d.length >= 9 ? d.slice(-9) : null; };
+/** JSON stocké en texte → valeur (ou valeur par défaut si vide ou invalide). */
+export function parseJson(s, dflt = null) {
+  if (s == null || s === '') return dflt;
+  try { return JSON.parse(s); } catch { return dflt; }
+}
+/** Distance à vol d'oiseau en mètres (équivalent de lg_distance_m). */
+export function distanceM(lat1, lng1, lat2, lng2) {
+  if ([lat1, lng1, lat2, lng2].some((v) => v == null)) return null;
+  const r = Math.PI / 180;
+  const a = Math.sin(((lat2 - lat1) * r) / 2) ** 2 + Math.cos(lat1 * r) * Math.cos(lat2 * r) * Math.sin(((lng2 - lng1) * r) / 2) ** 2;
+  return Math.round(12742000 * Math.asin(Math.sqrt(a)));
+}

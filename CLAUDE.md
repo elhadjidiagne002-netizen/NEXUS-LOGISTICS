@@ -49,7 +49,8 @@ financier**. Il ne vit plus dans la base Supabase de NEXUS Market. Plan par cycl
 ### Tests et aperçu
 - `npm run test:server` : tests du portage (D1 imitée sur `node:sqlite`, `test/helpers/d1-mock.js`, aussi
   stricte que D1 sur le nombre de paramètres) ; `test/helpers/api-client.js` (`register`, `invite`, `rpc`,
-  `rpcError`). `npm test` lance aussi les 103 tests Postgres (~15 min, PGlite) : en arrière-plan.
+  `rpcError`). `env.DB.calls` compte les allers-retours vers D1 (un `batch` = 1) : l'utiliser pour borner une
+  fonction qui traite un lot (import, API : ≤ 50 commandes par appel). `npm test` lance aussi les 103 tests Postgres (~15 min, PGlite) : en arrière-plan.
 - Aperçu local de la version complète : configuration `logistics-full` (port 5611) du launch.json de
   nexus-market = `scripts/api-dev.mjs` (API sur `.wrangler/dev.sqlite`, port 8789) + `vite --mode api`.
 - Prévisualisation en ligne : `npm run build:api && npx wrangler pages deploy dist --project-name

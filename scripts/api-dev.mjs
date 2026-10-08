@@ -17,7 +17,7 @@ createServer(async (req, res) => {
   const headers = new Headers();
   for (const [k, v] of Object.entries(req.headers)) if (typeof v === 'string' && k !== 'origin') headers.set(k, v);
   const body = chunks.length && req.method !== 'GET' && req.method !== 'HEAD' ? Buffer.concat(chunks) : undefined;
-  const r = await handle(new Request(`http://localhost:${port}${req.url}`, { method: req.method, headers, body }), env);
+  const r = await handle(new Request(`http://${req.headers.host || `localhost:${port}`}${req.url}`, { method: req.method, headers, body }), env);
   const out = {};
   r.headers.forEach((v, k) => { out[k] = k === 'set-cookie' ? v.replace(/; Secure/i, '') : v; });
   res.writeHead(r.status, out);

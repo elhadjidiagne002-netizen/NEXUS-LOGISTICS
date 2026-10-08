@@ -2,6 +2,23 @@
 
 Le plus récent en premier.
 
+## 08/10/2026 — Cycle C2 (Cloudflare) : commandes, zones, tarifs, suivi client
+- **Fait** : migration `migrations/0002_commandes.sql` (commandes, lignes, clients, catalogue, zones, grille, suppléments,
+  numéros bannis, demandes, notes, clés d'API ; `company_id` partout) ; modules `server/rpc/tarifs.js`,
+  `commandes.js`, `suivi.js` (35 fonctions, mêmes noms et formes que la version Postgres pour les écrans) ; route
+  `POST /api/v1/orders` (`server/routes/api-v1.js`). Interface (mode api) : Service client → Commandes (saisie, détail,
+  confirmation, assurance, annulation, lien WhatsApp, import CSV) et Produits ; Administration → Tarifs et zones
+  (quartiers de Dakar en un clic, ajout de zone, prix au km) et API boutiques ; page de suivi au nom de l'entreprise.
+- **Pourquoi** : la commande ne vient plus du site NEXUS ; elle naît chez chaque entreprise (téléphone, fichier, API).
+- **Choix** : un import ou un envoi API = au plus 50 commandes, lectures groupées puis UN `batch` (≤ 10 allers-retours
+  D1, mesuré par `D1Mock.calls`) ; numéro sans trou lu dans le compteur incrémenté par le même lot ; suppléments par
+  défaut sans ligne en base (écrite seulement à la modification) ; `lg_quote` public par l'adresse publique
+  (`p_company`) ; heure de Dakar = UTC (pas d'heure d'été).
+- **État** : `test:server` 24/24, `test:unit` 12/12, `build` et `build:api` OK, `test:sql` 93/93 (référence inchangée) ;
+  parcours vérifié dans Chromium (inscription → quartiers → tarif → commande → page de suivi). Rien déployé.
+- **À appliquer en ligne (en local, avant déploiement)** : `npx wrangler d1 migrations apply nexus-logistics --remote`
+  → applique `0002_commandes.sql`.
+
 ## 08/10/2026 — Changement de cible : service payant sur Cloudflare, sans démo ; cycle C1 (socle) fait
 - **Décision de l'utilisateur** : NEXUS Logistics devient un **service ouvert à toute entreprise qui livre**
   (gratuit puis abonnement, comme Devizo et My shop), **sans mode démo**, **tout sur Cloudflare** (Pages,
