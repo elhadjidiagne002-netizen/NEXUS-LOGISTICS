@@ -4,14 +4,16 @@ import { rpc } from '../lib/backend.js';
 import { act } from '../lib/offline.js';
 import { useRpc, useAction, feedback, Icon, Btn, Card, Badge, Empty, Loading, ErrorBox, PageHead, Modal, Field, Tabs, Chips, Stat, ago } from '../components/ui.jsx';
 import { Scanner } from '../components/field.jsx';
+import { PickProductivity } from '../components/productivity.jsx';
 import { useMe, has } from '../App.jsx';
 
 export default function Warehouse() {
   const [tab, setTab] = useState('inventory');
+  const me = useMe();
   return <>
     <PageHead title="Entrepôt" back="/" sub="Où est chaque produit, ce qui est rangé, ce qui a été compté." />
-    <Tabs value={tab} onChange={setTab} tabs={[['inventory', 'Inventaire du jour'], ['putaway', 'Rangement'], ['expiry', 'Péremption'], ['find', 'Rechercher'], ['locations', 'Emplacements']]} />
-    {tab === 'inventory' && <Inventory />}{tab === 'putaway' && <PutAway />}{tab === 'expiry' && <Expiry />}{tab === 'find' && <Find />}{tab === 'locations' && <Locations />}
+    <Tabs value={tab} onChange={setTab} tabs={[['inventory', 'Inventaire du jour'], ['putaway', 'Rangement'], ['expiry', 'Péremption'], ['find', 'Rechercher'], ['locations', 'Emplacements'], ...(has(me, 'dock_chief') ? [['productivity', 'Productivité']] : [])]} />
+    {tab === 'inventory' && <Inventory />}{tab === 'putaway' && <PutAway />}{tab === 'expiry' && <Expiry />}{tab === 'find' && <Find />}{tab === 'locations' && <Locations />}{tab === 'productivity' && <PickProductivity />}
   </>;
 }
 

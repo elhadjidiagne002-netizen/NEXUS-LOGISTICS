@@ -1,5 +1,6 @@
 // Module 14 — Les douze indicateurs de pilotage (chapitre 12), calculés depuis le journal de scans.
 import React, { useState } from 'react';
+import { PickProductivity } from '../components/productivity.jsx';
 import { useRpc, Card, Badge, Empty, Icon, Loading, ErrorBox, PageHead, Field, Chips, Stat, Tabs, formatF, dmy } from '../components/ui.jsx';
 
 const iso = (d) => d.toISOString().slice(0, 10);
@@ -9,8 +10,8 @@ export default function Analytics() {
   const [tab, setTab] = useState('kpis');
   return <>
     <PageHead title="Pilotage" back="/" sub="Mesurer ce qui coûte et ce qui fâche, anticiper la charge, repérer les dérives." />
-    <Tabs value={tab} onChange={setTab} tabs={[['kpis', 'Indicateurs'], ['forecast', 'Prévision'], ['anomalies', 'Anomalies'], ['drivers', 'Chauffeurs']]} />
-    {tab === 'kpis' && <Kpis />}{tab === 'forecast' && <Forecast />}{tab === 'anomalies' && <Anomalies />}{tab === 'drivers' && <Leaderboard />}
+    <Tabs value={tab} onChange={setTab} tabs={[['kpis', 'Indicateurs'], ['forecast', 'Prévision'], ['anomalies', 'Anomalies'], ['drivers', 'Chauffeurs'], ['picking', 'Préparation']]} />
+    {tab === 'kpis' && <Kpis />}{tab === 'forecast' && <Forecast />}{tab === 'anomalies' && <Anomalies />}{tab === 'drivers' && <Leaderboard />}{tab === 'picking' && <PickProductivity />}
   </>;
 }
 

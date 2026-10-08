@@ -2,6 +2,19 @@
 
 Le plus récent en premier.
 
+## 08/10/2026 — Cycle 7 : productivité de la préparation (module 01, P2)
+- `lg_pick_productivity(p_from, p_to)` (lecture seule ; chef de quai, répartiteur, comptable,
+  service client) : par préparateur, commandes, lignes, unités, temps, **lignes par heure**, saisie
+  manuelle, **mauvais scans** (produit inattendu, lu dans `lg_action_log`), **écarts au double
+  contrôle** (incidents `missing_item`), erreurs pour 100 lignes ; **ruptures par vendeur** et délai
+  de préparation ; **emballages consommés** par taille (d'après les dimensions du colisage).
+- Temps : une vague compte une seule fois (première prise → dernière fermeture), plafond 3 h par
+  commande ou vague (préparation abandonnée). Moins d'une minute cumulée → pas de cadence (défaut
+  vu à l'écran sur la démo : « 385 714 lignes/heure »).
+- Écrans : onglet « Préparation » du Pilotage, onglet « Productivité » de l'Entrepôt (chef de quai),
+  composant partagé `src/components/productivity.jsx`.
+- CI GitHub « Vérification » : verte sur la branche. Tests : 62/62.
+
 ## 08/10/2026 — Cycle 6 : lots et dates de péremption (module 01, P2)
 - **Rangement par lot** : `lg_put_away` prend désormais `p_lot` et `p_expires_on` (facultatifs) ;
   table `lg_stock_lots` (par produit × emplacement × lot × date). Une marchandise **déjà périmée

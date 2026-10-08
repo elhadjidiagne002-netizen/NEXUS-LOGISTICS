@@ -70,8 +70,8 @@ base Supabase** (projet `pqcqbstbdujzaclsiosv`). Toute la logique métier est en
     un fichier de script.
 
 ## Tests
-- `npm test` : 60 tests (PGlite = Postgres 18 en WebAssembly, pgcrypto inclus), dont un
-  fichier par cycle (`test/sql/cycle1..6.test.mjs`) qui part de la journée de démo.
+- `npm test` : 62 tests (PGlite = Postgres 18 en WebAssembly, pgcrypto inclus), dont un
+  fichier par cycle (`test/sql/cycle1..7.test.mjs`) qui part de la journée de démo.
 - `test/helpers/db.mjs` : `createDb()` charge le miroir + migrations + données ;
   `rpc(uid, nom, args)` appelle comme `supabase.rpc` sous l'identité `uid`.
 - Le miroir `supabase/stub/prod_subset.sql` a été relevé **en lecture seule** sur la prod
