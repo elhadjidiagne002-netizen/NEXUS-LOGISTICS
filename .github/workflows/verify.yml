@@ -1,0 +1,32 @@
+# Vérification de chaque branche et pull request (le déploiement, lui, ne part que de main).
+# Mêmes contrôles que l'étape « tests + construction » de deploy.yml, sans rien publier.
+name: Vérification
+
+on:
+  push:
+    branches-ignore: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Installation
+        run: npm ci
+
+      - name: Tests (SQL + algorithmes)
+        run: npm test
+
+      - name: Construction
+        run: npm run build

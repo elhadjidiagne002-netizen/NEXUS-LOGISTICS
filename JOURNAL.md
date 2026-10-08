@@ -21,7 +21,10 @@ Le plus récent en premier.
 - **Test de prévision qui échouait chaque jeudi** (le pic « Louma du vendredi » de la démo
   multipliait la prévision du lendemain) : remise à zéro des pics dans le test ; vendredi de la
   démo calculé en jours UTC (= Dakar) quel que soit le fuseau du navigateur.
-- Tests : 60/60. Vérifié dans la démo (navigateur headless) : onglet Péremption, rangement.
+- **Espace vendeur** : onglet « Péremption » (ses lots à J-30, invitation à une promotion avant la date).
+- **CI** : `.github/workflows/verify.yml` lance tests + construction sur toute branche ≠ `main` et
+  toute pull request (jusqu'ici, seuls les pushs sur `main` étaient testés… au moment de déployer).
+- Tests : 60/60. Vérifié dans la démo (navigateur headless) : onglet Péremption, rangement, espace vendeur (téléphone).
 - Branche `claude/gallant-johnson-4atibs` (pas `main` : `main` déploie).
 
 ## 08/10/2026 — Dépôt GitHub et mise en ligne (démo)

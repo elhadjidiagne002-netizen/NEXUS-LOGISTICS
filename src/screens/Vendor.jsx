@@ -1,4 +1,5 @@
-// Module 09 — Espace vendeur : suivre ses colis sans appeler, compléter ses fiches (code, poids, taille).
+// Module 09 — Espace vendeur : suivre ses colis sans appeler, compléter ses fiches (code, poids, taille),
+// voir ses lots qui périment à l'entrepôt.
 import React, { useState } from 'react';
 import { rpc } from '../lib/backend.js';
 import { useRpc, useAction, useNav, Btn, Card, Badge, Empty, Loading, ErrorBox, PageHead, Stat, Tabs, Chips, StatusBadge, HANDLING, ago } from '../components/ui.jsx';
@@ -7,6 +8,7 @@ export default function Vendor() {
   const { data: o, error, loading } = useRpc('lg_vendor_overview', {}, { refresh: 30000 });
   const [tab, setTab] = useState('packages');
   const { go } = useNav();
+  const lots = useRpc('lg_lots_expiring', {});
   if (loading && !o) return <Loading />;
   if (error) return <><PageHead title="Espace vendeur" back="/" /><ErrorBox error={error} /></>;
   return <>
@@ -19,11 +21,16 @@ export default function Vendor() {
       <Stat label="taux de rupture (30 j)" value={o.stockout_pct_30d != null ? `${o.stockout_pct_30d} %` : '—'} kind={o.stockout_pct_30d > 5 ? 'bad' : ''} />
       <Stat label="fiches à compléter" value={o.products_missing_data} kind={o.products_missing_data ? 'todo' : 'ok'} />
     </div>
-    <div style={{ marginTop: 12 }}><Tabs value={tab} onChange={setTab} tabs={[['packages', 'Mes colis'], ['products', 'Fiches produit']]} /></div>
+    <div style={{ marginTop: 12 }}><Tabs value={tab} onChange={setTab} tabs={[['packages', 'Mes colis'], ['products', 'Fiches produit'], ['lots', `Péremption${lots.data?.length ? ` (${lots.data.length})` : ''}`]]} /></div>
     {tab === 'packages' && <Card>{o.packages.length === 0 ? <Empty>Aucun colis ces 30 derniers jours.</Empty> :
       <div className="list">{o.packages.map((p) => <div key={p.code} className="line"><span className="mono">{p.code}</span>
         <span className="grow small muted">Cde {p.order_short} · {p.zone ?? ''} · {ago(p.updated_at)}</span>{p.attempts > 0 && <Badge kind="todo">{p.attempts} échec(s)</Badge>}<StatusBadge s={p.status} /></div>)}</div>}</Card>}
     {tab === 'products' && <Products />}
+    {tab === 'lots' && <Card><ErrorBox error={lots.error} />{!lots.data?.length ? <Empty>Aucun de vos lots ne périme dans les 30 prochains jours.</Empty> :
+      <div className="list">{lots.data.map((l) => <div key={l.id} className="line"><span className={`dot ${l.state === 'expired' ? 'bad' : 'todo'}`} />
+        <span className="grow"><b>{l.product}</b><div className="small muted">{l.lot ? `lot ${l.lot}` : 'sans n° de lot'} · {l.qty} unité(s) à l'entrepôt</div></span>
+        <Badge kind={l.state === 'expired' ? 'bad' : 'todo'}>{l.days_left < 0 ? 'périmé' : `${l.expires_on.split('-').reverse().join('/')} · J-${l.days_left}`}</Badge></div>)}</div>}
+      <p className="small muted">Pensez à une promotion sur le site avant la date, ou demandez leur retour au chef de quai.</p></Card>}
   </>;
 }
 
