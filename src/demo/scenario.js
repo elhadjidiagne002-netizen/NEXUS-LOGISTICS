@@ -157,5 +157,11 @@ export async function runScenario(rpc, query) {
   // calendrier de Dakar (UTC+0, sans heure d'été) : jours UTC, quel que soit le fuseau du navigateur
   const friday = new Date(); friday.setUTCDate(friday.getUTCDate() + ((5 - friday.getUTCDay() + 7) % 7 || 7));
   await rpc('lg_set_config', { p: { peak_days: [{ date: friday.toISOString().slice(0, 10), label: 'Louma du vendredi', factor: 1.5 }] } }, P.admin);
+  // 10. réception de lots datés (cycle 6) : des œufs qui périment dans 2 jours, du riz dans 3 semaines et dans 4 mois
+  const inDays = (n) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
+  for (const [code, loc, qty, lot, d] of [['OEUF-30', 'A-10-2', 4, 'OE-2610', 2], ['RIZ-5', 'A-01-1', 6, 'RZ-0925', 21],
+    ['RIZ-5', 'A-01-1', 10, 'RZ-1102', 120]]) {
+    await rpc('lg_put_away', { p_product_code: code, p_location_code: loc, p_qty: qty, p_event: ev(), p_lot: lot, p_expires_on: inDays(d) }, P.dock);
+  }
   return { orders: ids, trips: [tripA, tripB] };
 }

@@ -2,6 +2,28 @@
 
 Le plus récent en premier.
 
+## 08/10/2026 — Cycle 6 : lots et dates de péremption (module 01, P2)
+- **Rangement par lot** : `lg_put_away` prend désormais `p_lot` et `p_expires_on` (facultatifs) ;
+  table `lg_stock_lots` (par produit × emplacement × lot × date). Une marchandise **déjà périmée
+  est refusée** (`expired_lot`). Invariant : somme des lots ≤ quantité de l'emplacement (le reste
+  = stock non loti, rangé avant ou sans date).
+- **Premier périmé, premier sorti (FEFO)** : l'emplacement proposé (`lg_pick_location_id`) est
+  celui dont le lot valide périme le plus tôt ; un emplacement qui ne contient plus que du périmé
+  n'est jamais proposé. Le détail de préparation affiche « prendre lot X · JJ/MM/AAAA », et le
+  prélèvement décrémente ce lot (périmé seulement en dernier recours, mouvement marqué).
+- **Péremption** (`lg_lots_expiring`, réglage `expiry_alert_days`, 30 j) et **sortie de stock
+  motivée** (`lg_lot_discard` : rayon, stock du site, journal). Un vendeur voit les lots de ses produits.
+- **Rappel produit** (`lg_lot_trace`) : pour un n° de lot, les commandes servies, le client, son
+  téléphone (bouton Appeler) ; reçu / sorti / en rayon. Base : `lg_lot_moves` (mouvements signés).
+- **Cohérence** : un emplacement qui baisse (inventaire…) réduit ses lots, périmés puis plus anciens d'abord.
+- Écrans : onglet « Péremption » de l'Entrepôt (+ traçage), champs lot/DLC au rangement, lots dans la
+  recherche, consigne de lot à la préparation. Démo : 3 lots datés (œufs à J+2, riz à J+21 et J+120).
+- **Test de prévision qui échouait chaque jeudi** (le pic « Louma du vendredi » de la démo
+  multipliait la prévision du lendemain) : remise à zéro des pics dans le test ; vendredi de la
+  démo calculé en jours UTC (= Dakar) quel que soit le fuseau du navigateur.
+- Tests : 60/60. Vérifié dans la démo (navigateur headless) : onglet Péremption, rangement.
+- Branche `claude/gallant-johnson-4atibs` (pas `main` : `main` déploie).
+
 ## 08/10/2026 — Dépôt GitHub et mise en ligne (démo)
 - Dépôt `elhadjidiagne002-netizen/NEXUS-LOGISTICS` (créé par l'utilisateur, **public**) :
   l'envoi par le navigateur n'avait pris que les fichiers de premier niveau ; les dossiers
@@ -159,5 +181,4 @@ Dépôt git initialisé, aucun commit.
 - Langues : interface en français seulement ; textes wolof des messages à faire rédiger par
   des locuteurs (champ prévu dans l'écran Messages).
 - Paiement mobile à la porte (QR / lien PayTech), rapprochement automatique Wave/OM.
-- Lots et dates de péremption (module 01, P2).
 - Phase 3 : points relais, inter-villes, application Android native.

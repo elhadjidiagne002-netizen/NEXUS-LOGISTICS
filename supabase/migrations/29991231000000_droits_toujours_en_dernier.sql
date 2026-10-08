@@ -55,6 +55,7 @@ declare
     'lg_location_upsert', 'lg_locations_list', 'lg_put_away', 'lg_product_find', 'lg_wave_create', 'lg_wave_detail', 'lg_wave_scan',
     'lg_forecast', 'lg_anomalies', 'lg_leaderboard', 'lg_return_inspect', 'lg_returns_to_inspect',
     'lg_my_waves', 'lg_inventory_today', 'lg_inventory_count', 'lg_inventory_history', 'lg_product_location',
+    'lg_lots_expiring', 'lg_lot_discard', 'lg_lot_trace',
     -- chauffeur
     'lg_trip_start', 'lg_my_day', 'lg_stop_call', 'lg_stop_arrive', 'lg_deliver', 'lg_fail', 'lg_trip_finish',
     'lg_driver_ping', 'lg_sos', 'lg_add_expense', 'lg_vehicle_check',

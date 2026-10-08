@@ -60,12 +60,18 @@ base Supabase** (projet `pqcqbstbdujzaclsiosv`). Toute la logique métier est en
     sinon la carte passe devant les fenêtres modales.
 11. **Logo SVG** : identifiant de dégradé unique par instance (`useId`) ; un dégradé défini
     dans un bloc masqué n'est pas rendu par Chrome.
-12. **Bash Windows** : les heredocs Python avec apostrophes cassent sous Git Bash ; passer par
+12. **Lots (`lg_stock_lots`)** : somme des lots ≤ `lg_product_locations.qty`. Ne jamais baisser un
+    emplacement en contournant le déclencheur `lg_product_locations_lots_clamp`, et toujours passer par
+    `lg_pick_location_id` (FEFO) pour choisir où prélever. Changer la signature d'une fonction
+    (`lg_put_away`) : `drop function` de l'ancienne d'abord, sinon deux surcharges coexistent.
+13. **Test dépendant du jour** : la démo déclare un pic le vendredi ; un test de prévision doit
+    remettre `peak_days` à vide (il échouait chaque jeudi).
+14. **Bash Windows** : les heredocs Python avec apostrophes cassent sous Git Bash ; passer par
     un fichier de script.
 
 ## Tests
-- `npm test` : 54 tests (PGlite = Postgres 18 en WebAssembly, pgcrypto inclus), dont un
-  fichier par cycle (`test/sql/cycle1..5.test.mjs`) qui part de la journée de démo.
+- `npm test` : 60 tests (PGlite = Postgres 18 en WebAssembly, pgcrypto inclus), dont un
+  fichier par cycle (`test/sql/cycle1..6.test.mjs`) qui part de la journée de démo.
 - `test/helpers/db.mjs` : `createDb()` charge le miroir + migrations + données ;
   `rpc(uid, nom, args)` appelle comme `supabase.rpc` sous l'identité `uid`.
 - Le miroir `supabase/stub/prod_subset.sql` a été relevé **en lecture seule** sur la prod

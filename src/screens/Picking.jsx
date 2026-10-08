@@ -130,6 +130,7 @@ function Task({ id }) {
           <span className={`dot ${l.status === 'picked' ? 'ok' : l.status === 'short' ? 'bad' : 'todo'}`} />
           <div className="grow"><b>{l.name}</b>
             <div className="small muted">{l.location && <span className="badge info plain mono" style={{ marginRight: 6 }}><Icon name="pin" size={12} />{l.location}</span>}
+              {l.lot && l.status === 'pending' && <Badge kind={l.lot.state === 'soon' ? 'todo' : 'info'}>prendre {l.lot.lot ? `lot ${l.lot.lot}` : 'le lot'}{l.lot.expires_on ? ` · ${l.lot.expires_on.split('-').reverse().join('/')}` : ''}</Badge>}{' '}
               {l.barcode ? <span className="mono">{l.barcode}</span> : <Badge kind="todo">sans code-barres</Badge>}
               {' '}{(l.handling ?? []).map((h) => <Badge key={h}>{h}</Badge>)}{l.manual_entry && <Badge kind="info">saisie manuelle</Badge>}
               {l.status === 'short' && <Badge kind="bad">rupture · {l.qty_picked} trouvé(s)</Badge>}</div></div>
