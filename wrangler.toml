@@ -13,3 +13,11 @@ binding = "DB"
 database_name = "nexus-logistics"
 database_id = "b6751d1e-0d5f-44a7-b24a-b54ee6f136cf"
 migrations_dir = "migrations"
+
+# Photos et signatures de preuve (cycle C5). Sans cette liaison, elles sont gardées dans la table `files` de D1
+# (repli gratuit, ≤ 1,5 Mo par fichier). Pour passer à R2 (10 Go gratuits) : créer le compartiment
+#   npx wrangler r2 bucket create nexus-logistics-preuves
+# puis décommenter les trois lignes ci-dessous (les fichiers déjà en D1 restent lisibles).
+# [[r2_buckets]]
+# binding = "PROOFS"
+# bucket_name = "nexus-logistics-preuves"

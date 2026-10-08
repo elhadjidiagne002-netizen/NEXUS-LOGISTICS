@@ -5,6 +5,7 @@
 import { text, num, uuid, parseJson, distanceM } from './core.js';
 import { confirmCod, cancelOrder, amountDue, orderShort } from './commandes.js';
 import { zoneAt } from './tarifs.js';
+import { FAILURE_REASONS } from './terrain.js';
 
 const TOKEN = /^[A-Za-z0-9_-]{16,64}$/;
 const REQUEST_KINDS = ['reschedule', 'callback', 'help', 'third_party'];
@@ -31,6 +32,22 @@ export default {
                 EXISTS (SELECT 1 FROM packages WHERE order_id = ?1 AND company_id = ?2 AND status IN ('loaded', 'out_for_delivery', 'delivered')) AS loaded`,
       ).bind(o.id, o.company_id).first();
       const rated = k.rated; const open = (o.status === 'pending' || o.status === 'processing') && !k.loaded;
+      // arrêt de livraison le plus récent, échec éventuel, code de livraison (cycle C5) : une seule requête groupée
+      const [st, fl, dc] = await ctx.db.batch([
+        ctx.db.prepare(
+          `SELECT s.id, s.seq, s.status, s.eta, s.lat, s.lng, t.id AS trip_id, t.status AS trip_status, c.name AS courier, c.rating_avg,
+                  c.last_lat, c.last_lng, c.last_seen_at,
+                  (SELECT count(*) FROM trip_stops x WHERE x.trip_id = t.id AND x.seq < s.seq AND x.status IN ('pending', 'en_route', 'arrived')) AS before
+             FROM trip_stops s JOIN trips t ON t.id = s.trip_id LEFT JOIN couriers c ON c.id = t.courier_id
+            WHERE s.order_id = ? AND s.company_id = ? AND s.kind = 'delivery' AND s.status <> 'skipped' AND t.status <> 'cancelled'
+            ORDER BY t.created_at DESC LIMIT 1`).bind(o.id, o.company_id),
+        ctx.db.prepare("SELECT completed_at, failure_reason FROM trip_stops WHERE order_id = ? AND company_id = ? AND status = 'failed' ORDER BY completed_at DESC LIMIT 1")
+          .bind(o.id, o.company_id),
+        ctx.db.prepare('SELECT code, verified_at, expires_at, attempts_left FROM delivery_codes WHERE order_id = ? AND company_id = ?').bind(o.id, o.company_id),
+      ]);
+      const s = st.results[0]; const f = fl.results[0]; const code = dc.results[0];
+      const live = s?.trip_status === 'in_progress';
+      const fresh = s?.last_seen_at && s.last_seen_at > new Date(Date.parse(ctx.now) - 15 * 60000).toISOString();
       return {
         ok: true,
         company: { name: o.company_name },
@@ -46,8 +63,16 @@ export default {
           { key: 'shipped', label: 'En route', at: o.in_transit_at },
           { key: 'delivered', label: 'Livré', at: o.delivered_at },
         ],
-        failure: null,   // passage sans remise : cycle C5
-        delivery: null,  // livreur, heure d'arrivée et position : cycles C4-C5
+        failure: f && o.status !== 'delivered' ? { at: f.completed_at, reason: FAILURE_REASONS[f.failure_reason]?.label ?? 'Autre' } : null,
+        delivery: s ? {
+          eta: s.eta, status: s.status, stops_before: live && ['pending', 'en_route'].includes(s.status) ? s.before : 0,
+          courier: s.courier ? String(s.courier).split(' ')[0] : null, courier_rating: s.rating_avg,
+          // position du livreur : seulement quand il roule vers CE client (chapitre 11)
+          position: live && ['en_route', 'arrived'].includes(s.status) && fresh && s.last_lat != null ? { lat: s.last_lat, lng: s.last_lng, at: s.last_seen_at } : null,
+          dest: s.lat != null ? { lat: s.lat, lng: s.lng } : null,
+        } : null,
+        // code à donner au livreur : visible sur la page privée tant que le colis est en route
+        delivery_code: code && !code.verified_at && o.status === 'in_transit' && code.expires_at > ctx.now && code.attempts_left > 0 ? code.code : null,
         can_confirm: o.payment_method === 'cod' && !o.cod_confirmed_at && o.status !== 'cancelled' && o.status !== 'delivered',
         can_edit_address: open,
         can_rate: o.status === 'delivered' && !rated,

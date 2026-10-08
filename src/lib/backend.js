@@ -114,9 +114,22 @@ async function apiImpl() {
     async acceptInvite(token, form) { return set(await call('POST', `/api/invites/${token}/accept`, form)); },
     async switchCompany(id) { return set(await call('POST', '/api/auth/company', { company_id: id })); },
     async signOut() { await call('POST', '/api/auth/logout').catch(() => {}); set(null); },
-    // photos de preuve : stockage R2 à venir (ROADMAP.md, cycle « Terrain »)
-    async upload() { throw new RpcError('not_available'); },
-    async signedUrl() { return null; },
+    // photos et signatures de preuve : PUT /api/files/<voyage>/… (R2 ou repli D1), lues par la session
+    async upload(path, blob) {
+      if (isOffline()) throw new NetworkError('offline');
+      let res;
+      try {
+        res = await fetch(`/api/files/${path}`, { method: 'PUT', credentials: 'same-origin', body: blob,
+          headers: { 'content-type': blob.type || 'image/jpeg', ...(DEVICE_ID ? { 'x-lg-device': DEVICE_ID } : {}) } });
+      } catch (e) { throw new NetworkError(e.message); }
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        if (res.status >= 500 && !data) throw new NetworkError(`http_${res.status}`);
+        throw new RpcError(data?.error ?? 'upload_failed', data?.detail, data?.message);
+      }
+      return path;
+    },
+    async signedUrl(path) { return path ? `/api/files/${path}` : null; },
     channel() { return () => {}; },
   };
 }

@@ -275,22 +275,24 @@ export default {
       if (!hasRole(ctx, ['picker', 'dock_chief', 'dispatcher', 'support', 'cashier', 'accountant']) && !(o.vendor_id && o.vendor_id === ctx.user.id)) fail('forbidden', 403);
       const holderSql = { driver: 'SELECT name FROM couriers WHERE id = ? AND company_id = ?', hub: 'SELECT name FROM hubs WHERE id = ? AND company_id = ?',
         vendor: 'SELECT u.name FROM users u JOIN members m ON m.user_id = u.id WHERE u.id = ? AND m.company_id = ?' }[p.holder_type];
-      const [holder, events, incidents] = await ctx.db.batch([
+      const [holder, events, incidents, proofs] = await ctx.db.batch([
         ctx.db.prepare(holderSql ?? "SELECT 'Client' AS name WHERE ? IS NOT NULL OR ? IS NOT NULL").bind(p.holder_id, ctx.company.id),
         ctx.db.prepare(
-          `SELECT e.event, e.server_at AS at, e.device_at, u.name AS actor, e.manual_entry AS manual, e.trip_id, e.lat, e.lng, e.meta
-             FROM scan_events e LEFT JOIN users u ON u.id = e.actor_id WHERE e.package_id = ? AND e.company_id = ? ORDER BY e.server_at, e.id`,
+          `SELECT e.event, e.server_at AS at, e.device_at, u.name AS actor, e.manual_entry AS manual, e.trip_id, t.number AS trip_number, e.lat, e.lng, e.meta
+             FROM scan_events e LEFT JOIN users u ON u.id = e.actor_id LEFT JOIN trips t ON t.id = e.trip_id
+            WHERE e.package_id = ? AND e.company_id = ? ORDER BY e.server_at, e.id`,
         ).bind(p.id, ctx.company.id),
         ctx.db.prepare('SELECT number, kind, status FROM incidents WHERE package_id = ? AND company_id = ? ORDER BY number').bind(p.id, ctx.company.id),
+        ctx.db.prepare(`SELECT pf.kind, pf.file_path, pf.recipient_name AS recipient, pf.distance_m, pf.created_at AS at FROM proofs pf
+            JOIN trip_packages tp ON tp.stop_id = pf.stop_id WHERE tp.package_id = ? AND pf.company_id = ? ORDER BY pf.created_at`).bind(p.id, ctx.company.id),
       ]);
       const { holder_id, ...pkg } = p;
       return {
         package: { ...pkg, handling: parseJson(p.handling, []), check_required: Boolean(p.check_required) },
         order: { id: o.id, short: String(o.number), status: o.status, zone: o.delivery_zone, payment_method: o.payment_method, vendor_name: o.vendor_name },
         holder: { type: p.holder_type, name: p.holder_type === 'customer' ? 'Client' : holder.results[0]?.name ?? (p.holder_type === 'vendor' ? o.vendor_name : null) },
-        // numéro de voyage et preuves de livraison : cycles C4 et C5
-        timeline: events.results.map((e) => ({ ...e, manual: Boolean(e.manual), trip_number: null, meta: parseJson(e.meta, {}) })),
-        proofs: [],
+        timeline: events.results.map((e) => ({ ...e, manual: Boolean(e.manual), meta: parseJson(e.meta, {}) })),
+        proofs: proofs.results,
         incidents: incidents.results,
       };
     },

@@ -2,6 +2,23 @@
 
 Le plus récent en premier.
 
+## 08/10/2026 — Cycle C5 (Cloudflare) : livraison sur le terrain et retours
+- **Fait** : `migrations/0005_terrain.sql` (codes de livraison, preuves, encaissements, adresses vérifiées, positions,
+  dépenses, demandes de retour, causes et frais de retour, contrôles de retour, fichiers) ; modules
+  `server/rpc/terrain.js` (journée du chauffeur, départ, appel, arrivée manuelle ou GPS, livraison avec code client
+  ou signature + photo + encaissement exact, échec motivé, fin de tournée, SOS, dépenses, collecte, transferts) et
+  `retours.js` (retour au quai, au vendeur, causes et qui paie, contrôle et remise en vente, reprises chez le client) ;
+  route `server/routes/files.js` (photos et signatures, R2 ou repli D1) ; page de suivi complétée (livreur, heure,
+  position, code à donner, passage manqué) ; fiche colis avec preuves et numéro de voyage ; frais de route dans les
+  coûts de la flotte ; l'app chauffeur envoie sa position toutes les 30 s (au lieu de 10).
+- **Pourquoi** : sans ce cycle, toute livraison s'arrêtait sur « Cette fonction n'est pas encore disponible ».
+- **Choix** : code client gardé en clair (il s'affiche sur la page de suivi privée), nouveau à chaque départ ; un
+  code faux décompte un essai et répond `{ ok:false, error:'bad_code' }` (règle 5). Photos dans D1 tant que R2 n'est
+  pas branché (gratuit, ~150 Ko par photo compressée) — passer à R2 dès que le volume grossit (`wrangler.toml`).
+- **État** : 49 tests serveur, 12 unitaires, builds OK ; tournée complète vérifiée dans Chromium (départ signé,
+  code, photo envoyée puis relue, page de suivi « Livrée »).
+- **À appliquer en ligne** : `npx wrangler d1 migrations apply nexus-logistics --remote` → `0005_terrain.sql`.
+
 ## 08/10/2026 — Cycle C4 (Cloudflare) : flotte, quai et voyages
 - **Fait** : `migrations/0004_voyages.sql` ; modules `server/rpc/flotte.js` (véhicules, documents, entretien au km,
   contrôle avant départ, alertes, adresse de collecte) et `voyages.js` (voyages, arrêts, chargement contrôlé,

@@ -81,16 +81,24 @@ l'aperçu (`logistics-full`), migrations D1 appliquées en ligne, déploiement d
       (`lg_transfer_stop`, `lg_take_transfer`) déplacés au C5 (ils suivent les échecs de livraison) ; frais de route
       dans les coûts de la flotte au C5.
 
-## C5 — Livraison sur le terrain
-- [ ] Retours (`lg_returns_expected`, `lg_returns_to_inspect`, `lg_return_causes`, `lg_return_classify`,
-      `lg_return_inspect`, `lg_return_hub`, `lg_return_vendor`, `lg_returns_pending`, `lg_trip_add_return`) et
-      transferts entre voyages (`lg_transfer_stop`, `lg_take_transfer`), venus du C4 ; `lg_collect` (collecte).
-- [ ] App chauffeur : arrêts, appel client, arrivée (manuelle et automatique GPS), code client (OTP) avec
-      essais décomptés **sans exception** (le refus laisse une trace), signature, échec et présentations.
-- [ ] **Photos de preuve sur R2** (bucket `nexus-logistics-preuves`, privé, chemin préfixé par l'entreprise),
-      `upload` / `signedUrl` dans `backend.js` (lecture via route authentifiée, pas d'URL publique).
-- [ ] Positions : `lg_driver_ping` **toutes les 30 s au plus** (budget d'écritures D1), dernière position sur
-      `couriers`, trace échantillonnée ; SOS ; dépenses de voyage ; file hors ligne (idempotence `p_event`).
+## C5 — Livraison sur le terrain ✅ (08/10/2026)
+- [x] Retours (`lg_returns_expected`, `lg_returns_to_inspect`, `lg_return_causes`, `lg_return_cause_save`,
+      `lg_return_classify`, `lg_return_inspect`, `lg_return_hub`, `lg_return_vendor`, `lg_returns_pending`,
+      `lg_trip_add_return`, + `lg_return_request` : demande saisie par le service client) et transferts entre voyages
+      (`lg_transfer_stop`, `lg_take_transfer`) ; `lg_collect` (collecte chez le vendeur ou reprise chez le client).
+- [x] App chauffeur : `lg_my_day`, départ signé (`lg_trip_start`, code client par commande), appel (`lg_stop_call`),
+      arrivée manuelle et automatique GPS, code client avec essais décomptés **sans exception**, signature, photo,
+      encaissement exact (espèces / Wave / Orange Money, mixte), échec motivé (appel exigé, incident), fin de tournée
+      (bilan, alerte « colis à rapporter » levée au dernier retour), plafond d'espèces, adresse vérifiée réutilisée.
+- [x] **Photos de preuve** : `PUT` / `GET /api/files/<voyage>/…` (session, entreprise, chauffeur du voyage) ; R2 si
+      la liaison `PROOFS` existe, sinon table `files` de D1 (≤ 1,5 Mo) ; `upload` / `signedUrl` dans `backend.js`.
+- [x] Positions : `lg_driver_ping` toutes les 30 s (écriture ≤ 1 / 25 s, trace toutes les 2 min) ; SOS ; dépenses
+      de voyage (dans les coûts de la flotte) ; page de suivi : livreur, heure, arrêts avant, position, code,
+      passage manqué. 7 tests serveur ; tournée complète vérifiée dans Chromium.
+- Reste : migration `0005` à appliquer en ligne ; R2 facultatif (voir `wrangler.toml`) ; gains chauffeur,
+      versements intermédiaires (`cash_drops`), facture à la livraison et avoirs des retours → C6 ; messages
+      « livreur en route », « livré », « reprise prévue » → C8 ; `lg_my_reinforcements` (renforts) → C7 ;
+      `lg_track_incidents` / réponse du client à une proposition d'incident → C11.
 
 ## C6 — Caisse, factures, reversements → BASCULE
 - [ ] Versements chauffeur, comptage par billets, écarts → incident, rapprochement, gains chauffeur, reçu.

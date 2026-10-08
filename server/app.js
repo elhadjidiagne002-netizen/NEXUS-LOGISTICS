@@ -3,6 +3,7 @@ import { HttpError, json } from './http.js';
 import * as account from './routes/account.js';
 import { handleRpc } from './rpc/index.js';
 import * as apiV1 from './routes/api-v1.js';
+import * as files from './routes/files.js';
 
 const ROUTES = [
   ['GET', /^\/api\/health$/, () => json({ ok: true, service: 'nexus-logistics' })],
@@ -15,6 +16,8 @@ const ROUTES = [
   ['GET', /^\/api\/invites\/(?<token>[\w-]{16,80})$/, account.getInvite],
   ['POST', /^\/api\/invites\/(?<token>[\w-]{16,80})\/accept$/, account.acceptInvite],
   ['POST', /^\/api\/v1\/orders$/, apiV1.postOrders],
+  ['PUT', /^\/api\/files\/(?<path>[^?#]{8,320})$/, files.put],
+  ['GET', /^\/api\/files\/(?<path>[^?#]{8,320})$/, files.get],
   ['POST', /^\/api\/rpc\/(?<name>lg_[a-z0-9_]{1,60})$/, (req, env, p) => handleRpc(req, env, p.name)],
 ];
 

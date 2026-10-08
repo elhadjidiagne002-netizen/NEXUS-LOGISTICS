@@ -22,11 +22,14 @@ import preparation from './preparation.js';
 import entrepot from './entrepot.js';
 import flotte from './flotte.js';
 import voyages from './voyages.js';
+import terrain from './terrain.js';
+import retours from './retours.js';
 
-export const REGISTRY = { ...socle, ...tarifs, ...commandes, ...suivi, ...preparation, ...entrepot, ...flotte, ...voyages };
+export const REGISTRY = { ...socle, ...tarifs, ...commandes, ...suivi, ...preparation, ...entrepot, ...flotte, ...voyages,
+  ...terrain, ...retours };
 
 
-async function buildContext(request, env) {
+export async function buildContext(request, env) {
   const s = await currentSession(request, env);
   const ctx = { env, db: env.DB, now: now(), user: null, company: null, member: null, roles: [], isAdmin: false,
     courierId: null, sessionId: null, deviceId: null, request };
@@ -57,7 +60,7 @@ async function buildContext(request, env) {
 
 
 /** Appareil bloqué (perdu, volé) ou session coupée à distance : refus côté serveur. */
-async function deviceBlocked(ctx) {
+export async function deviceBlocked(ctx) {
   if (!ctx.deviceId || !ctx.company) return false;
   const d = await ctx.db.prepare('SELECT blocked, revoked_session FROM devices WHERE company_id = ? AND user_id = ? AND device_id = ?')
     .bind(ctx.company.id, ctx.user.id, ctx.deviceId).first();

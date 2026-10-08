@@ -50,10 +50,12 @@ const stopIdSql = "(SELECT id FROM trip_stops WHERE trip_id = ? AND order_id = ?
 
 async function orderForStop(ctx, orderId) {
   return ctx.db.prepare(
-    `SELECT o.*, c.lat AS c_lat, c.lng AS c_lng, c.landmark AS c_landmark,
+    // position : celle de la commande, sinon l'adresse vérifiée à une livraison précédente (C5), sinon la fiche client
+    `SELECT o.*, coalesce(va.lat, c.lat) AS c_lat, coalesce(va.lng, c.lng) AS c_lng, coalesce(va.landmark, c.landmark) AS c_landmark,
             CASE WHEN s.id IS NOT NULL THEN s.day || 'T' || s.start_time || ':00.000Z' END AS window_start,
             CASE WHEN s.id IS NOT NULL THEN s.day || 'T' || s.end_time || ':00.000Z' END AS window_end
        FROM orders o LEFT JOIN customers c ON c.id = o.customer_id LEFT JOIN delivery_slots s ON s.id = o.slot_id
+       LEFT JOIN verified_addresses va ON va.company_id = o.company_id AND va.phone_key = c.phone_key
       WHERE o.id = ? AND o.company_id = ?`,
   ).bind(String(orderId ?? ''), ctx.company.id).first();
 }

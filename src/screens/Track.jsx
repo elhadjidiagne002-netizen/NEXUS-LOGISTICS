@@ -44,6 +44,8 @@ export default function Track({ token }) {
     </div>
     <div className="stack" style={{ marginTop: 14 }}>
       {d.amount_due_fcfa > 0 && o.status !== 'cancelled' && <div className="flash todo"><Icon name="cash" /><div>Montant à préparer : <b className="big">{formatF(d.amount_due_fcfa)}</b><div className="small">Espèces, Wave ou Orange Money</div></div></div>}
+      {d.delivery_code && <div className="flash ok"><Icon name="shield" /><div>Code à donner au livreur : <b className="big" style={{ letterSpacing: 4 }}>{d.delivery_code}</b>
+        <div className="small">Ne le donnez qu'à la remise du colis.</div></div></div>}
       {d.failure && <div className="flash bad"><Icon name="alert" />Passage le {dmy(d.failure.at)} à {hhmm(d.failure.at)} sans pouvoir vous remettre le colis ({d.failure.reason.toLowerCase()}).</div>}
       <Card><ul className="timeline">{d.steps.map((st) => <li key={st.key}><span className={`dot ${st.at ? 'ok' : ''}`} />
         <b style={{ opacity: st.at ? 1 : .5 }}>{st.label}</b>{st.at && <div className="small muted">{dmy(st.at)} à {hhmm(st.at)}</div>}</li>)}</ul></Card>

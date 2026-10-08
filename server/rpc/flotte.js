@@ -61,12 +61,13 @@ export default {
     async handler(ctx) {
       const cid = ctx.company.id; const day = today(ctx);
       const since = new Date(Date.parse(ctx.now) - 30 * 86400000).toISOString();
-      const [vs, docs, logs, trips, couriers] = await ctx.db.batch([
+      const [vs, docs, logs, trips, couriers, exp] = await ctx.db.batch([
         ctx.db.prepare("SELECT * FROM vehicles WHERE company_id = ? AND status <> 'retired'").bind(cid),
         ctx.db.prepare('SELECT id, vehicle_id, kind, number, expires_at FROM vehicle_documents WHERE company_id = ? AND vehicle_id IS NOT NULL ORDER BY expires_at').bind(cid),
         ctx.db.prepare('SELECT vehicle_id, kind, ok, odometer_km, next_due_km, cost_fcfa, created_at FROM vehicle_logs WHERE company_id = ?').bind(cid),
         ctx.db.prepare("SELECT vehicle_id, number, status, started_at, distance_km FROM trips WHERE company_id = ? AND (status IN ('planned', 'loading', 'sealed', 'in_progress') OR started_at IS NOT NULL)").bind(cid),
         ctx.db.prepare('SELECT id, name FROM couriers WHERE company_id = ?').bind(cid),
+        ctx.db.prepare("SELECT vehicle_id, sum(amount_fcfa) AS n FROM trip_expenses WHERE company_id = ? AND status <> 'rejected' AND created_at > ? GROUP BY vehicle_id").bind(cid, since),
       ]);
       const alertKm = Number(ctx.company.config.maintenance_alert_km ?? 500);
       const order = ['available', 'on_trip', 'maintenance'];
@@ -82,7 +83,7 @@ export default {
             expired: d.expires_at < day, soon: d.expires_at < plusDays(day, 15) })),
           last_check: check ? { at: check.created_at, ok: Boolean(check.ok) } : null,
           // frais de route (cycle C5) + entretien des 30 derniers jours
-          costs_30d_fcfa: vl.filter((l) => l.created_at > since).reduce((s, l) => s + (l.cost_fcfa ?? 0), 0),
+          costs_30d_fcfa: vl.filter((l) => l.created_at > since).reduce((s, l) => s + (l.cost_fcfa ?? 0), 0) + (exp.results.find((e) => e.vehicle_id === v.id)?.n ?? 0),
           km_30d: vt.filter((t) => t.started_at && t.started_at > since).reduce((s, t) => s + (t.distance_km ?? 0), 0) || null,
           on_trip: vt.find((t) => ['planned', 'loading', 'sealed', 'in_progress'].includes(t.status))?.number ?? null,
           maintenance: maintenance(v, vl, vt, alertKm),

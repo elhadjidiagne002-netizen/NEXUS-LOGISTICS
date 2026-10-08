@@ -38,13 +38,13 @@ export default function Driver({ stopId }) {
   </>;
 }
 
-/** Position envoyée toutes les 10 s tant que l'app est visible et qu'un voyage roule (le serveur n'écrit qu'une fois par minute). */
+/** Position envoyée toutes les 30 s tant que l'app est visible et qu'un voyage roule (budget gratuit Cloudflare ; trace gardée toutes les 2 min). */
 function usePositionBroadcast(active, onArrive) {
   useEffect(() => {
     if (!active || !navigator.geolocation) return;
     let last = 0;
     const id = navigator.geolocation.watchPosition((p) => {
-      if (Date.now() - last < 10000 || document.visibilityState !== 'visible') return;
+      if (Date.now() - last < 30000 || document.visibilityState !== 'visible') return;
       last = Date.now();
       rpc('lg_driver_ping', { p_lat: p.coords.latitude, p_lng: p.coords.longitude, p_accuracy_m: Math.round(p.coords.accuracy),
         p_speed_kmh: p.coords.speed != null ? Math.round(p.coords.speed * 3.6) : null })
