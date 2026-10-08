@@ -2,6 +2,19 @@
 
 Le plus récent en premier.
 
+## 08/10/2026 — Scan des codes-barres à l'entrée en stock
+- **Demande** : pouvoir scanner le code-barres pour faire entrer les produits en stock.
+- **Fait** (même composant de scan que la préparation : caméra du téléphone avec détection native ou bibliothèque
+  de secours, douchette Bluetooth, saisie manuelle) :
+  - Entrée de marchandise : scanner sélectionne le produit (code-barres, référence ou code NXI) et chaque scan du
+    même produit ajoute 1 à la quantité ; un code inconnu propose « Créer ce produit » avec le code prérempli, puis
+    le sélectionne aussitôt.
+  - Fiche produit : bouton caméra pour lire le code-barres au lieu de le taper.
+  - Réception d'un bon de commande : « Compter au scan » — chaque article scanné compte sur sa ligne, article absent
+    du bon signalé, impossible de dépasser le reste à recevoir.
+- **Vérifié** dans l'aperçu local (douchette simulée) : 3 scans → quantité 3 ; code inconnu → création → entrée en
+  stock ; comptage d'un bon 2/3 puis 3/3 et refus au-delà. La caméra elle-même se vérifie sur un téléphone.
+
 ## 08/10/2026 — Fournisseurs et bons de commande
 - **Demande** : ajouter la gestion des fournisseurs et des bons de commande.
 - **Fait** (migration `0014_achats.sql`, `server/rpc/achats.js`, `src/components/purchasing.jsx`) : onglets

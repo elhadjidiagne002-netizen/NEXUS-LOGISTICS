@@ -2,19 +2,25 @@
 // motivée, transfert entre emplacements, historique des mouvements, liste « à commander », import / export Excel,
 // fournisseurs et bons de commande (components/purchasing.jsx).
 // Le stock baisse tout seul à la préparation des commandes et remonte aux retours remis en vente.
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { rpc } from '../lib/backend.js';
 import { act } from '../lib/offline.js';
 import { parseProductsCsv, downloadCsv, PRODUCTS_TEMPLATE } from '../lib/csv.js';
 import { useRpc, useAction, Icon, Btn, Card, Badge, Empty, Loading, ErrorBox, PageHead, Modal, Field, Tabs, Chips, Stat, HANDLING, formatF, dmy, ago } from '../components/ui.jsx';
 import { useMe, has } from '../App.jsx';
 import { PurchaseOrders, Suppliers } from '../components/purchasing.jsx';
+import { Scanner } from '../components/field.jsx';
 
 const STATE = { ok: ['en stock', 'ok'], low: ['sous le seuil', 'todo'], out: ['rupture', 'bad'], untracked: ['non suivi', ''] };
 const KIND = { in: 'Entrée', pick: 'Préparation', adjust: 'Correction', count: 'Inventaire', discard: 'Rebut', return: 'Retour', transfer: 'Transfert', initial: 'Stock de départ' };
 const REASONS = ['Casse', 'Perte ou vol', 'Erreur de saisie', 'Cadeau ou échantillon', 'Périmé', 'Comptage'];
 const n = (v) => (v == null ? '—' : Number(v).toLocaleString('fr-FR'));
 const isVendor = (me) => me.is_vendor && !me.is_admin && !(me.roles ?? []).length;
+/** Produit correspondant à un code scanné : code-barres, référence ou code interne NXI-xxxxxxxx (sans tenir compte de la casse). */
+export const productByCode = (products, code) => {
+  const c = String(code ?? '').trim().toUpperCase();
+  return c ? products.find((p) => p.barcode?.toUpperCase() === c || p.sku?.toUpperCase() === c || `NXI-${p.id.slice(0, 8)}`.toUpperCase() === c) ?? null : null;
+};
 
 export default function Stock() {
   const me = useMe();
@@ -97,6 +103,7 @@ function StockList({ ov, me }) {
 export function ProductForm({ p, me, onClose, onDone }) {
   const [f, setF] = useState({ ...p, weight_kg: p.weight_g ? String(p.weight_g / 1000) : '', price_fcfa: p.price_fcfa ?? '', stock: '' });
   const sups = useRpc('lg_suppliers_list', {}, { skip: isVendor(me) });
+  const [scan, setScan] = useState(false);
   const [run, busy] = useAction();
   const s = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const num = (v) => (v === '' || v == null ? null : Number(String(v).replace(/\s/g, '').replace(',', '.')));
@@ -106,7 +113,11 @@ export function ProductForm({ p, me, onClose, onDone }) {
       <Field label="Prix de vente (F)"><input className="input" inputMode="numeric" value={f.price_fcfa} onChange={s('price_fcfa')} /></Field>
       <Field label="Prix d'achat (F, facultatif)"><input className="input" inputMode="numeric" value={f.cost_fcfa ?? ''} onChange={s('cost_fcfa')} /></Field>
       <Field label="Référence (facultatif)"><input className="input mono" value={f.sku ?? ''} onChange={s('sku')} /></Field>
-      <Field label="Code-barres (facultatif)"><input className="input mono" value={f.barcode ?? ''} onChange={s('barcode')} /></Field>
+      <Field label="Code-barres (facultatif)"><div className="row" style={{ flexWrap: 'nowrap' }}>
+        <input className="input mono" style={{ flex: 1, minWidth: 0 }} value={f.barcode ?? ''} onChange={s('barcode')} />
+        <Btn onClick={() => setScan(true)} aria-label="Scanner le code-barres" title="Scanner avec la caméra"><Icon name="camera" /></Btn></div></Field>
+      {scan && <div style={{ gridColumn: '1 / -1' }}><Scanner startCamera autoFocusInput={false} placeholder="Code-barres"
+        onCode={(c) => { setF((x) => ({ ...x, barcode: c })); setScan(false); }} /></div>}
       <Field label="Poids (kg)"><input className="input" inputMode="decimal" value={f.weight_kg} onChange={s('weight_kg')} /></Field>
       <Field label="Seuil d'alerte (« à commander » en dessous)"><input className="input" inputMode="numeric" value={f.min_stock ?? ''} onChange={s('min_stock')} placeholder="aucun" /></Field>
       {!p.id && <Field label="Stock de départ (laisser vide si non suivi)"><input className="input" inputMode="numeric" value={f.stock} onChange={s('stock')} /></Field>}
@@ -123,34 +134,53 @@ export function ProductForm({ p, me, onClose, onDone }) {
         weight_g: f.weight_kg ? Math.round(num(f.weight_kg) * 1000) : null, min_stock: num(f.min_stock), supplier: f.supplier || null, supplier_id: f.supplier_id || null, vendor_name: f.vendor_name ?? null,
         handling: f.handling ?? [], active: f.active !== false, stock: p.id ? null : num(f.stock),
         length_cm: f.length_cm ?? null, width_cm: f.width_cm ?? null, height_cm: f.height_cm ?? null } });
-      if (r?.ok !== false) onDone();
+      if (r?.ok !== false) onDone(r?.id, { name: f.name, sku: f.sku || null, barcode: f.barcode || null, price_fcfa: num(f.price_fcfa) ?? 0 });
       return r;
     }, { ok: 'Produit enregistré' })}>Enregistrer</Btn></div></Modal>;
 }
 
 // ----------------------------------------------------------------- entrée de marchandise
 function Receive({ products, me, onDone }) {
-  const [q, setQ] = useState(''); const [pick, setPick] = useState(null);
-  const found = q.length >= 2 ? products.filter((p) => p.active && `${p.name} ${p.sku ?? ''} ${p.barcode ?? ''}`.toLowerCase().includes(q.toLowerCase())).slice(0, 8) : [];
-  const exact = products.find((p) => [p.sku, p.barcode].some((c) => c && c.toUpperCase() === q.trim().toUpperCase()));
+  const [q, setQ] = useState(''); const [pick, setPick] = useState(null); const [count, setCount] = useState(0);
+  const [unknown, setUnknown] = useState(null); const [create, setCreate] = useState(null); const [extra, setExtra] = useState([]);
+  const all = useMemo(() => [...products, ...extra], [products, extra]);
+  const found = q.length >= 2 ? all.filter((p) => p.active !== false && `${p.name} ${p.sku ?? ''} ${p.barcode ?? ''}`.toLowerCase().includes(q.toLowerCase())).slice(0, 8) : [];
+  const choose = (p, n = 0) => { setPick(p); setCount(n); setUnknown(null); setQ(''); };
+  // chaque scan du produit en cours ajoute une unité ; un autre produit le remplace
+  const onScan = (code) => {
+    const p = productByCode(all, code);
+    if (!p) { setUnknown(code); return; }
+    if (pick?.id === p.id) setCount((c) => c + 1); else choose(p, 1);
+  };
   return <div className="split">
-    <Card><h3>1. Quel produit ?</h3>
-      <input className="input" autoFocus placeholder="Nom, référence ou code-barres (douchette)" value={q} onChange={(e) => { setQ(e.target.value); setPick(null); }}
-        onKeyDown={(e) => { if (e.key === 'Enter' && exact) { e.preventDefault(); setPick(exact); } }} />
-      <div className="list" style={{ marginTop: 8 }}>{found.map((p) => <button key={p.id} className="line" onClick={() => setPick(p)}
-        style={{ width: '100%', textAlign: 'left', background: pick?.id === p.id ? 'var(--brand-50, #ecfdf5)' : 'none', border: 0, cursor: 'pointer' }}>
+    <Card><h3>1. Scannez le produit</h3>
+      <p className="small muted" style={{ marginTop: -6 }}>Caméra du téléphone (bouton <Icon name="camera" size={14} />) ou douchette. Scannez chaque article : la quantité monte toute seule.</p>
+      <Scanner onCode={onScan} placeholder="Code-barres ou référence" autoFocusInput />
+      {unknown && <div className="flash todo" style={{ marginTop: 8 }}><div>Code <b className="mono">{unknown}</b> inconnu.</div>
+        <div className="row" style={{ marginTop: 6 }}><Btn size="sm" kind="primary" onClick={() => setCreate({ name: '', barcode: unknown, price_fcfa: '', handling: [] })}><Icon name="plus" size={14} />Créer ce produit</Btn>
+          <Btn size="sm" onClick={() => setUnknown(null)}>Ignorer</Btn></div></div>}
+      <div className="small muted" style={{ margin: '12px 0 4px' }}>… ou cherchez-le par son nom :</div>
+      <input className="input" placeholder="Nom du produit" value={q} onChange={(e) => setQ(e.target.value)} />
+      <div className="list" style={{ marginTop: 8 }}>{found.map((p) => <button key={p.id} className="line" onClick={() => choose(p)}
+        style={{ width: '100%', textAlign: 'left', background: 'none', border: 0, cursor: 'pointer' }}>
         <span className="grow"><b>{p.name}</b><div className="small muted">{[p.sku, p.barcode].filter(Boolean).join(' · ')}</div></span><span className="small">stock {n(p.stock)}</span></button>)}</div>
-      {q.length >= 2 && !found.length && <p className="small muted">Aucun produit. Créez-le d'abord dans l'onglet Stock (＋ Produit).</p>}
+      {q.length >= 2 && !found.length && <p className="small muted">Aucun produit. Créez-le dans l'onglet Stock (＋ Produit), ou scannez son code-barres.</p>}
     </Card>
-    <Card><h3>2. Combien, et où ?</h3>{!pick ? <Empty icon="box">Choisissez le produit reçu.</Empty>
-      : <ReceiveForm product={pick} me={me} onDone={() => { setPick(null); setQ(''); onDone(); }} />}</Card>
+    <Card><h3>2. Combien, et où ?</h3>{!pick ? <Empty icon="scan">Scannez ou choisissez le produit reçu.</Empty>
+      : <><div className="row between" style={{ marginBottom: 6 }}><b>{pick.name}</b>{count > 0 && <Badge kind="ok">{count} scanné(s)</Badge>}</div>
+        <ReceiveForm key={pick.id} product={pick} me={me} scanned={count} onDone={() => { setPick(null); setCount(0); onDone(); }} /></>}</Card>
+    {create && <ProductForm p={create} me={me} onClose={() => setCreate(null)} onDone={(id, saved) => {
+      const np = { ...create, ...saved, id, stock: null, active: true };
+      setCreate(null); onDone(); if (id) { setExtra((x) => [...x, np]); choose(np, 1); }
+    }} />}
   </div>;
 }
 
-function ReceiveForm({ product, me, onDone }) {
+function ReceiveForm({ product, me, onDone, scanned = 0 }) {
   const staff = !isVendor(me);
   const locs = useRpc('lg_locations_list', {}, { skip: !staff || !(me.is_admin || has(me, 'picker', 'dock_chief')) });
-  const [f, setF] = useState({ qty: '', loc: '', lot: '', dlc: '', ref: '', note: '' });
+  const [f, setF] = useState({ qty: scanned ? String(scanned) : '', loc: '', lot: '', dlc: '', ref: '', note: '' });
+  useEffect(() => { if (scanned) setF((x) => ({ ...x, qty: String(scanned) })); }, [scanned]);
   const [run, busy] = useAction();
   const s = (k) => (e) => setF({ ...f, [k]: e.target.value });
   return <div className="stack">

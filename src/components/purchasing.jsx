@@ -5,6 +5,7 @@ import { rpc } from '../lib/backend.js';
 import { act } from '../lib/offline.js';
 import { printPurchaseOrder } from '../lib/print.js';
 import { useRpc, useAction, Icon, Btn, Card, Badge, Empty, Loading, ErrorBox, Modal, Field, Chips, formatF, dmy, ago } from './ui.jsx';
+import { Scanner } from './field.jsx';
 
 export const PO_STATUS = { draft: ['brouillon', ''], sent: ['envoyé', 'info'], partial: ['reçu en partie', 'todo'], received: ['reçu', 'ok'], cancelled: ['annulé', 'bad'] };
 const day = (d) => (d ? d.split('-').reverse().join('/') : '—');
@@ -79,9 +80,25 @@ function ReceivePo({ po, onClose, onDone }) {
   const left = (l) => l.qty_ordered - l.qty_received;
   const [q, setQ] = useState(() => Object.fromEntries(po.lines.map((l) => [l.id, { qty: String(left(l)), loc: '' }])));
   const [ref, setRef] = useState(''); const [run, busy] = useAction();
+  const [counting, setCounting] = useState(false); const [msg, setMsg] = useState(null);
   const set = (id, k, v) => setQ({ ...q, [id]: { ...q[id], [k]: v } });
+  // comptage au scan : on part de zéro, chaque article scanné ajoute 1 à sa ligne (sans dépasser le reste à recevoir)
+  const startCounting = () => { setCounting(true); setQ(Object.fromEntries(po.lines.map((l) => [l.id, { ...q[l.id], qty: '0' }]))); };
+  const onScan = (code) => {
+    const c = code.trim().toUpperCase();
+    const l = po.lines.find((x) => x.barcode?.toUpperCase() === c || x.sku?.toUpperCase() === c || `NXI-${x.product_id.slice(0, 8)}`.toUpperCase() === c);
+    if (!l) { setMsg({ bad: true, text: `${code} : pas sur ce bon` }); return; }
+    setQ((cur) => {
+      const now = Number(cur[l.id]?.qty || 0);
+      if (now >= left(l)) { setMsg({ bad: true, text: `${l.name} : déjà ${now}, tout est reçu` }); return cur; }
+      setMsg({ text: `${l.name} : ${now + 1} / ${left(l)}` });
+      return { ...cur, [l.id]: { ...cur[l.id], qty: String(now + 1) } };
+    });
+  };
   return <Modal title={`Réception · ${po.number}`} onClose={onClose}><div className="stack">
-    <p className="small muted" style={{ margin: 0 }}>Indiquez ce qui est réellement arrivé (0 si une ligne manque). Le reste reste attendu.</p>
+    <p className="small muted" style={{ margin: 0 }}>Indiquez ce qui est réellement arrivé (0 si une ligne manque), ou comptez au scan. Le reste reste attendu.</p>
+    {!counting ? <Btn onClick={startCounting}><Icon name="scan" size={16} />Compter au scan (caméra ou douchette)</Btn>
+      : <><Scanner onCode={onScan} placeholder="Scanner chaque article" />{msg && <div className={`flash ${msg.bad ? 'bad' : 'ok'}`}>{msg.text}</div>}</>}
     {po.lines.filter((l) => left(l) > 0).map((l) => <div key={l.id} className="grid cols-3" style={{ alignItems: 'end' }}>
       <div><b>{l.name}</b><div className="small muted">reste {left(l)} sur {l.qty_ordered}</div></div>
       <Field label="Reçu"><input className="input" inputMode="numeric" value={q[l.id].qty} onChange={(e) => set(l.id, 'qty', e.target.value.replace(/\D/g, ''))} /></Field>
