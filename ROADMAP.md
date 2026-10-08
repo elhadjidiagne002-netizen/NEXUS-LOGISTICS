@@ -1,0 +1,105 @@
+# Feuille de route — NEXUS Logistics, version complète sur Cloudflare
+
+Décision du 08/10/2026 (utilisateur) : NEXUS Logistics devient un **service payant ouvert à toute entreprise
+qui livre** (sociétés de livraison, boutiques et vendeurs qui ont leurs livreurs), **sans mode démo**, hébergé
+**entièrement sur Cloudflare** (Pages + Pages Functions + D1 + R2), **sans coût financier** (offres gratuites).
+NEXUS Market devient un client parmi d'autres.
+
+Méthode : on **porte** la logique Postgres existante (`supabase/migrations/*.sql`, 176 fonctions `lg_*`) en
+JavaScript (`server/rpc/*.js`) sur D1, **sous les mêmes noms et avec les mêmes arguments**, pour que les écrans
+React (`src/screens/*`) marchent sans être réécrits. Les tests Postgres (`test/sql/*.test.mjs`) sont le cahier
+des charges : chaque cycle porte les tests correspondants dans `test/server/*.test.js`. Toutes les règles de
+`CLAUDE.md` (multi-entreprises, idempotence, numéros sans trou, budget gratuit) s'appliquent.
+
+Un cycle n'est terminé que si : tests serveur au vert, `npm run build:api` OK, écrans du cycle vérifiés dans
+l'aperçu (`logistics-full`), migrations D1 appliquées en ligne, déploiement de prévisualisation vérifié
+(`https://complet.nexus-logistics-6my.pages.dev`), `JOURNAL.md` et cette feuille mis à jour, commit poussé.
+
+## C1 — Socle multi-entreprises ✅ (08/10/2026, session locale)
+- [x] D1 `nexus-logistics` (WEUR), migration `0001_socle.sql` : entreprises, comptes, membres, rôles logistiques,
+      lieux, chauffeurs, sessions, appareils, invitations, idempotence, compteurs, audit, limitation de débit.
+- [x] Comptes : inscription d'une entreprise (propriétaire + premier lieu), connexion, session, déconnexion,
+      changement d'entreprise active, changement de mot de passe ; PBKDF2 100 000 ; cookie HttpOnly ; CSRF.
+- [x] Invitations par lien (WhatsApp), usage unique y compris en double clic, compte neuf ou existant,
+      fiche chauffeur créée pour un chauffeur.
+- [x] Répartiteur `POST /api/rpc/<nom>` : session, entreprise, appareil bloqué, rôles ; fonctions du socle
+      (`lg_me`, équipe et rôles, chauffeurs, lieux, réglages, appareils).
+- [x] Interface : mode `api` (`npm run build:api`), écran connexion / création d'entreprise, page d'invitation,
+      carte « Inviter par lien » dans Administration → Rôles.
+- [x] 12 tests serveur dont isolation entre entreprises et refus sans session de TOUTE fonction.
+
+## C2 — Commandes, zones, tarifs, suivi client
+- [ ] Tables `orders`, `order_items`, `products` (catalogue logistique : poids, volume, froid, fragile), clients
+      (nom, téléphone, adresse par repère, position), zones (polygones ou quartiers) et grilles tarifaires.
+- [ ] Saisie d'une commande (écran Service client), import CSV (gabarit), et **API par clé** pour les
+      boutiques en ligne : `POST /api/v1/orders` avec clé d'entreprise (empreinte stockée, révocable).
+- [ ] Portage : `lg_quote` (devis au km ou par zone, suppléments nuit/pluie, assurance), `lg_set_zone`,
+      `lg_upsert_rate_card`, `lg_surcharge_save/declare`, `lg_pricing`, `lg_confirm_cod`,
+      `lg_cancel_unconfirmed`, `lg_order_insure`, `lg_product_logistics`, `lg_product_find`.
+- [ ] Page de suivi publique `/suivi/<jeton>` (`lg_track*`, rôles `public`, jeton secret par commande).
+- [ ] Montants en **FCFA entiers** partout (plus de conversion EUR : ce n'est plus la base NEXUS).
+
+## C3 — Préparation et entrepôt
+- [ ] Tâches de préparation, verrou de prise (`pick_lock_minutes`), scan article par article, ruptures,
+      emballage multi-colis, pesée, étiquettes (`lg_pick_*`, `lg_labels`, `lg_resolve_short`, `lg_wave_create`).
+- [ ] Préparation chez le vendeur OU au hub (les deux, réglage par entreprise).
+- [ ] Entrepôt : emplacements, rangement, lots et péremption FEFO, inventaire, productivité
+      (`lg_location_upsert`, `lg_lot_trace`…). Portage des tests `cycle4`, `cycle6`, `cycle7`.
+
+## C4 — Flotte, quai et voyages
+- [ ] Véhicules, documents, entretien au km, contrôle avant départ (`lg_fleet`, `lg_upsert_vehicle`,
+      `lg_add_document`, `lg_log_maintenance`, `lg_vehicle_check`, `lg_set_vehicle_status`).
+- [ ] Voyages : création, ajout/retrait/ordre des arrêts, chargement contrôlé (poids, volume, colis, froid),
+      scellé, plusieurs quais et file d'attente, collectes vendeurs, retours, transferts, créneaux de dépôt
+      (`lg_trip_*`, `lg_dock_*`, `lg_dropoff_*`). Numéros de voyage sans trou (`nextCounter`).
+- [ ] Planification automatique et suggestions (`lg_autoplan_run`, `lg_suggest_trips`) — algorithme en JS
+      (`src/lib/algo.js` existe déjà côté client).
+
+## C5 — Livraison sur le terrain
+- [ ] App chauffeur : arrêts, appel client, arrivée (manuelle et automatique GPS), code client (OTP) avec
+      essais décomptés **sans exception** (le refus laisse une trace), signature, échec et présentations.
+- [ ] **Photos de preuve sur R2** (bucket `nexus-logistics-preuves`, privé, chemin préfixé par l'entreprise),
+      `upload` / `signedUrl` dans `backend.js` (lecture via route authentifiée, pas d'URL publique).
+- [ ] Positions : `lg_driver_ping` **toutes les 30 s au plus** (budget d'écritures D1), dernière position sur
+      `couriers`, trace échantillonnée ; SOS ; dépenses de voyage ; file hors ligne (idempotence `p_event`).
+
+## C6 — Caisse, factures, reversements → BASCULE
+- [ ] Versements chauffeur, comptage par billets, écarts → incident, rapprochement, gains chauffeur, reçu.
+- [ ] Factures et avoirs (numéros sans trou par année), export comptable, relevé de reversement vendeur.
+- [ ] **BASCULE** : `deploy.yml` construit `build:api` sur `main` ; logistique.nexusmarket.sn sert la version
+      complète. Suppression du mode démo (PGlite, `src/demo/`, `seed`), de `supabase-js` et du mode
+      `supabase` dans `backend.js` ; écran d'accueil sans « Démonstration ». Les fonctions pas encore
+      portées affichent « bientôt disponible » au lieu d'une erreur.
+
+## C7 — Pilotage et tâches automatiques
+- [ ] Tour de contrôle : carte des chauffeurs, voyages, alertes (rafraîchissement par interrogation toutes
+      les 20-30 s, pas de temps réel : budget de requêtes), `lg_ack_alert`, `lg_transfer_stop`.
+- [ ] Tâches planifiées (surveillance, relances vendeurs, rapport du soir, purge) : route `POST /api/cron/<tâche>`
+      protégée par secret, appelée par un **Cron Trigger d'un petit Worker** (Pages n'a pas de cron ; offre
+      gratuite = 5 déclencheurs par compte, déjà utilisés en partie par nexus-cron → regrouper).
+- [ ] Indicateurs, tableaux par axe + export Excel, coûts et marges, prévision, renforts, anomalies, classement.
+
+## C8 — Messages clients
+- [ ] Modèles modifiables, aperçu, file d'envoi (`lg_template_save`, `lg_preview_message`), réponses.
+- [ ] Envoi **gratuit** : lien `wa.me` pré-rempli (un geste du répartiteur ou du chauffeur) par défaut ;
+      envoi automatique si l'entreprise branche **sa propre** instance WhatsApp (Green API / WAHA : identifiants
+      chiffrés par entreprise) ; e-mail de secours (Brevo, quota gratuit partagé à surveiller).
+
+## C9 — Offre payante et site public
+- [ ] Formules : gratuite (quotas : livraisons par mois, chauffeurs, lieux) et Pro (abonnement mensuel),
+      comme Devizo et My shop ; paiement **Wave / Orange Money déclaré** puis activé par l'admin plateforme.
+- [ ] Administration de la plateforme (`ADMIN_EMAILS`) : entreprises, formules, suspension, statistiques.
+- [ ] Page d'accueil commerciale (avantages, tarifs, inscription), mentions légales, CGU, confidentialité,
+      `robots.txt`, `sitemap.xml`, partage social ; suivi des erreurs (remontée maison, Sentry si projet créé).
+
+## C10 — Intégration NEXUS Market
+- [ ] NEXUS Market devient une entreprise cliente : ses commandes payées arrivent par l'API par clé (C2),
+      les statuts de livraison repartent vers NEXUS par un appel signé (HMAC).
+- [ ] Côté dépôt `nexus-market` : brancher l'envoi des commandes, et retirer ou adapter `lg-fallback.js`
+      (conçu pour l'ancienne cible : messages `lg_*` dans `notification_outbox`).
+
+## C11 — Fonctions avancées restantes et nettoyage
+- [ ] Ce qui reste des cycles 6 à 22 de la version Postgres (incidents et assurance, engagement de délai des
+      vendeurs, retours et causes, coûts…), s'il n'a pas été porté avant.
+- [ ] Suppression de l'archive Postgres (`supabase/`, `test/sql/`, `nexus-logistics-mvp.sql`) une fois tout
+      porté ; mise à jour du README.

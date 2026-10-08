@@ -1,5 +1,8 @@
-// Accès aux données. Deux modes, une seule interface : rpc(nom, arguments).
-// - « supabase » : la vraie base (VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY).
+// Accès aux données. Une seule interface pour tous les modes : rpc(nom, arguments).
+// - « api »      : la version complète sur Cloudflare (Pages Functions + D1, multi-entreprises),
+//                  POST /api/rpc/<nom>. Activée par VITE_BACKEND=api au build, ou ?api dans l'adresse.
+//                  Elle remplacera les deux autres modes à la fin du portage (ROADMAP.md).
+// - « supabase » : l'ancienne cible, la base NEXUS (VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY).
 // - « demo »     : Postgres complet DANS le navigateur (PGlite), qui exécute exactement
 //                  les mêmes migrations SQL que la prod, avec un jeu de données fictif.
 //                  Rien ne sort du téléphone ; utile pour former les équipes.
@@ -7,10 +10,13 @@
 
 const SB_URL = import.meta.env.VITE_SUPABASE_URL;
 const SB_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
-export const MODE = SB_URL && SB_KEY && !new URLSearchParams(location.search).has('demo') ? 'supabase' : 'demo';
+const QS = new URLSearchParams(location.search);
+export const MODE = (import.meta.env.VITE_BACKEND === 'api' && !QS.has('demo')) || QS.has('api') ? 'api'
+  : SB_URL && SB_KEY && !QS.has('demo') ? 'supabase' : 'demo';
 
 export class RpcError extends Error {
-  constructor(code, detail) { super(code); this.code = code; this.detail = detail; }
+  // text : phrase en français renvoyée par le serveur (mode api), utilisée si le code n'est pas traduit
+  constructor(code, detail, text) { super(code); this.code = code; this.detail = detail; this.text = text; }
 }
 export class NetworkError extends Error {}
 
@@ -77,6 +83,41 @@ async function supabaseImpl() {
       const ch = sb.channel('lg-' + table).on('postgres_changes', { event: '*', schema: 'public', table }, cb).subscribe();
       return () => sb.removeChannel(ch);
     },
+  };
+}
+
+/* ----------------------------------------------------------- API CLOUDFLARE */
+async function apiImpl() {
+  const headers = { 'content-type': 'application/json', ...(DEVICE_ID ? { 'x-lg-device': DEVICE_ID } : {}) };
+  async function call(method, path, body) {
+    if (isOffline()) throw new NetworkError('offline');
+    let res;
+    try {
+      res = await fetch(path, { method, headers, credentials: 'same-origin', body: body === undefined ? undefined : JSON.stringify(body) });
+    } catch (e) { throw new NetworkError(e.message); }
+    let data = null;
+    try { data = await res.json(); } catch { /* corps vide ou page d'erreur */ }
+    if (!res.ok) {
+      if (res.status >= 500 && !data) throw new NetworkError(`http_${res.status}`);
+      throw new RpcError(data?.error ?? `http_${res.status}`, data?.detail, data?.message);
+    }
+    return data;
+  }
+  let current = (await call('GET', '/api/auth/session')).session;
+  const set = (s) => { current = s; emit(); return s; };
+  return {
+    rpc: (name, args = {}) => call('POST', `/api/rpc/${name}`, args),
+    async session() { return current; },
+    async signIn(email, password) { return set(await call('POST', '/api/auth/login', { email, password })); },
+    async register(form) { return set(await call('POST', '/api/auth/register', form)); },
+    async invitation(token) { return call('GET', `/api/invites/${token}`); },
+    async acceptInvite(token, form) { return set(await call('POST', `/api/invites/${token}/accept`, form)); },
+    async switchCompany(id) { return set(await call('POST', '/api/auth/company', { company_id: id })); },
+    async signOut() { await call('POST', '/api/auth/logout').catch(() => {}); set(null); },
+    // photos de preuve : stockage R2 à venir (ROADMAP.md, cycle « Terrain »)
+    async upload() { throw new RpcError('not_available'); },
+    async signedUrl() { return null; },
+    channel() { return () => {}; },
   };
 }
 
@@ -181,7 +222,7 @@ function rpcOn(db, getUid = () => null, getSid = () => null) {
 export function progress(msg) { window.dispatchEvent(new CustomEvent('lg-progress', { detail: msg })); }
 
 export async function backend() {
-  if (!impl) impl = MODE === 'supabase' ? supabaseImpl() : demoImpl();
+  if (!impl) impl = MODE === 'api' ? apiImpl() : MODE === 'supabase' ? supabaseImpl() : demoImpl();
   return impl;
 }
 export const rpc = async (name, args) => (await backend()).rpc(name, args);

@@ -1,5 +1,28 @@
 // Codes renvoyés par les fonctions de la base → phrases courtes pour le terrain.
 const M = {
+  // version Cloudflare (comptes et entreprises)
+  auth: 'Connectez-vous pour continuer.',
+  no_company: "Ce compte n'est rattaché à aucune entreprise (ou en a été retiré).",
+  unknown_function: "Cette fonction n'est pas encore disponible dans cette version.",
+  not_available: "Cette fonction n'est pas encore disponible dans cette version.",
+  invalid_role: 'Rôle inconnu.',
+  unknown_user: "Personne inconnue dans votre entreprise.",
+  unknown_hub: 'Lieu inconnu.',
+  unknown_courier: 'Chauffeur inconnu.',
+  owner_only: "Réservé au propriétaire de l'entreprise.",
+  cannot_remove_self: 'Vous ne pouvez pas vous retirer vous-même.',
+  cannot_remove_owner: "Le propriétaire de l'entreprise ne peut pas être retiré.",
+  invalid_name: 'Indiquez un nom.',
+  invalid_vehicle: 'Type de véhicule inconnu.',
+  invalid_kind: 'Type de lieu inconnu.',
+  invalid_position: 'Position GPS invalide.',
+  invite_invalid: "Ce lien d'invitation n'est plus valable : demandez-en un nouveau.",
+  email_taken: 'Un compte existe déjà avec cette adresse : connectez-vous.',
+  weak_password: 'Mot de passe : 8 caractères au moins.',
+  invalid_email: 'Adresse e-mail invalide.',
+  invalid_company: "Indiquez le nom de l'entreprise.",
+  rate: 'Trop de tentatives : réessayez dans quelques minutes.',
+  server_error: 'Erreur du serveur. Réessayez dans un instant.',
   forbidden: 'Vous n\'avez pas le droit de faire cette action.',
   login_failed: 'Identifiants incorrects.',
   not_a_courier: 'Ce compte n\'est pas un compte chauffeur.',
@@ -131,5 +154,5 @@ const M = {
 export function errText(e) {
   const raw = typeof e === 'string' ? e : e?.code ?? e?.error ?? e?.message ?? String(e);
   const code = String(raw).split(':')[0].trim();
-  return M[code] ?? M[raw] ?? raw;
+  return M[code] ?? M[raw] ?? e?.text ?? raw;
 }

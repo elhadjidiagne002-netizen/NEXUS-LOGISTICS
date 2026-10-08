@@ -1,7 +1,15 @@
-# Cloudflare Pages — site statique construit par Vite (npm run build → dist/).
-# Déploiement automatique : .github/workflows/deploy.yml à chaque push sur main.
-# À la main, depuis la racine du dépôt :
-#   npm run build && npx wrangler pages deploy dist --project-name nexus-logistics
+# Cloudflare Pages (interface construite par Vite → dist/) + Pages Functions (functions/ → server/) + D1.
+# Déployer DEPUIS LA RACINE du dépôt (sinon functions/ n'est pas envoyé) :
+#   npm run build:api && npx wrangler pages deploy dist --project-name nexus-logistics --branch main
+# Nouvelles migrations D1 (migrations/) — AVANT le déploiement :
+#   npx wrangler d1 migrations apply nexus-logistics --remote
+# Déploiement automatique : .github/workflows/deploy.yml (secret CLOUDFLARE_API_TOKEN).
 name = "nexus-logistics"
 pages_build_output_dir = "dist"
 compatibility_date = "2026-09-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "nexus-logistics"
+database_id = "b6751d1e-0d5f-44a7-b24a-b54ee6f136cf"
+migrations_dir = "migrations"

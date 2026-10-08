@@ -1,5 +1,65 @@
 # NEXUS LOGISTICS — notes pour Claude / contributeurs
 
+## ⚠️ Changement de cible (08/10/2026) — LIRE D'ABORD
+Décision de l'utilisateur : NEXUS Logistics devient un **service payant ouvert à toute entreprise qui livre**,
+**sans mode démo**, hébergé **entièrement sur Cloudflare** (Pages + Pages Functions + D1 + R2), **sans coût
+financier**. Il ne vit plus dans la base Supabase de NEXUS Market. Plan par cycles : **`ROADMAP.md`**
+(faire le premier cycle non terminé). Historique : `JOURNAL.md`.
+
+### Architecture cible
+- **Interface** : la même app React/Vite (`src/`). Elle n'appelle que `rpc(nom, args)` (`src/lib/backend.js`).
+  Mode **`api`** = `npm run build:api` / `npm run dev:api` : `POST /api/rpc/<nom>`. Les modes `demo`
+  (PGlite) et `supabase` sont **à supprimer à la bascule** (cycle C6), pas avant.
+- **Serveur** : `functions/api/[[path]].js` → `server/app.js` (routes de compte) → `server/rpc/index.js`
+  (répartiteur). Fonctions métier dans `server/rpc/<module>.js`, déclarées
+  `lg_xxx: { roles, handler(ctx, args) }`, à ajouter au `REGISTRY`. Runtime Workers : pas de module Node.
+- **Base** : D1 `nexus-logistics` (id dans `wrangler.toml`), migrations **`migrations/NNNN_*.sql`**
+  (SQLite). En ligne : `npx wrangler d1 migrations apply nexus-logistics --remote` AVANT de déployer.
+- **Référence** : `supabase/migrations/*.sql` (version Postgres, 176 fonctions) et `test/sql/*.test.mjs`
+  sont le **cahier des charges** du portage : mêmes noms de fonction, mêmes arguments `p_*`, même forme
+  de résultat (l'interface en dépend). Ne plus les modifier, sauf pour les supprimer au cycle C11.
+
+### Règles du portage (à respecter dans chaque cycle)
+1. **Multi-entreprises** : toute table métier a `company_id` ; **toute** requête d'un handler filtre sur
+   `ctx.company.id`, y compris les UPDATE/DELETE par id (`WHERE id = ? AND company_id = ?`), puis vérifie
+   `meta.changes`. Chaque cycle ajoute un test d'isolation (une autre entreprise ne voit ni ne modifie rien).
+   Ne jamais renvoyer « n'existe pas » différemment de « pas à vous » (même code `unknown_*`).
+2. **Rôles** : `roles: 'public' | 'member' | 'admin' | ['dispatcher', …]` (admin = owner/admin de
+   l'entreprise, toujours autorisé). Le test « toute fonction non publique refuse un visiteur » parcourt
+   le REGISTRY : une fonction `public` doit être voulue (page de suivi par jeton secret).
+3. **Pas de transaction interactive dans D1** : écritures multiples = `env.DB.batch([...])` (atomique) ;
+   transitions d'état par UPDATE **conditionnel** (`WHERE status = 'x'`) + contrôle de `meta.changes`
+   au lieu de `SELECT … FOR UPDATE` ; insertions dépendantes conditionnées dans le même lot
+   (`INSERT … SELECT … WHERE EXISTS (…)`, cf. `acceptInvite`).
+4. **Idempotence** des actions de terrain : `idempotent(ctx, nom, args.p_event, fn)` (`server/rpc/core.js`).
+5. **Un refus métier qui doit laisser une trace ne lève pas d'erreur** : renvoyer `{ ok:false, error }` après
+   avoir écrit (ex. essais du code client décomptés). Les autres refus : `fail('code')` → `{ error: code }`.
+   Tout nouveau code d'erreur a sa phrase dans `src/lib/errors.js`.
+6. **Numéros visibles sans trou** : `nextCounter(ctx, 'facture-2026')` (table `counters`), jamais
+   AUTOINCREMENT ni aléatoire pour un numéro montré au client.
+7. **Montants en FCFA entiers** (plus de conversion EUR ×655,957 : ce n'est plus la base NEXUS Market).
+8. **Budget gratuit Cloudflare** (à garder en tête à chaque fonction) : Workers 100 000 requêtes/jour et
+   **10 ms de CPU par requête** ; D1 5 M lectures et **100 000 écritures/jour**, 5 Go ; R2 10 Go.
+   → GPS au plus toutes les 30 s, interrogation (polling) 20-30 s au lieu du temps réel, pas de dépendance
+   npm lourde dans `server/` (mesurer : `npx wrangler check startup --pages`), requêtes groupées
+   (`json_group_array`, `batch`) plutôt qu'en boucle. D1 limite à 100 paramètres liés par requête.
+9. **Jamais `502`** comme code d'erreur (Cloudflare remplace le corps) : `500`.
+10. Dates en texte ISO UTC (`ctx.now`) ; affichage à l'heure de Dakar côté interface.
+
+### Tests et aperçu
+- `npm run test:server` : tests du portage (D1 imitée sur `node:sqlite`, `test/helpers/d1-mock.js`, aussi
+  stricte que D1 sur le nombre de paramètres) ; `test/helpers/api-client.js` (`register`, `invite`, `rpc`,
+  `rpcError`). `npm test` lance aussi les 103 tests Postgres (~15 min, PGlite) : en arrière-plan.
+- Aperçu local de la version complète : configuration `logistics-full` (port 5611) du launch.json de
+  nexus-market = `scripts/api-dev.mjs` (API sur `.wrangler/dev.sqlite`, port 8789) + `vite --mode api`.
+- Prévisualisation en ligne : `npm run build:api && npx wrangler pages deploy dist --project-name
+  nexus-logistics --branch complet` → https://complet.nexus-logistics-6my.pages.dev (même base D1 que la
+  production : effacer les données d'essai après vérification). Production = https://logistique.nexusmarket.sn.
+
+---
+
+# Archive — version Postgres (cible abandonnée le 08/10/2026), utile comme référence du portage
+
 App web installable (React + Vite) distincte du site NEXUS Market, qui parle à la **même
 base Supabase** (projet `pqcqbstbdujzaclsiosv`). Toute la logique métier est en SQL
 (fonctions `lg_*`), les écrans ne font qu'appeler `rpc()`. Dossier de référence :

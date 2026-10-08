@@ -2,6 +2,29 @@
 
 Le plus récent en premier.
 
+## 08/10/2026 — Changement de cible : service payant sur Cloudflare, sans démo ; cycle C1 (socle) fait
+- **Décision de l'utilisateur** : NEXUS Logistics devient un **service ouvert à toute entreprise qui livre**
+  (gratuit puis abonnement, comme Devizo et My shop), **sans mode démo**, **tout sur Cloudflare** (Pages,
+  Functions, D1, R2), **sans coût financier**, développé **par cycles en cloud**. Raisons : la base Supabase
+  de NEXUS est sur l'instance gratuite Nano, déjà saturée plusieurs fois ; un 2e projet Supabase gratuit se
+  met en pause après 7 jours et a la même petite machine ; héberger pour de bon à part dans Supabase aurait
+  obligé à synchroniser commandes et comptes entre deux bases.
+- **Méthode** : portage de la logique Postgres en JavaScript sur D1 **sous les mêmes noms** (`rpc(nom, args)`),
+  pour garder les écrans React ; les tests Postgres servent de cahier des charges. Plan : `ROADMAP.md`
+  (C1 à C11, bascule du domaine et suppression de la démo au cycle C6). Règles : `CLAUDE.md` (en tête).
+- **C1 fait ici** : D1 `nexus-logistics` (WEUR, `b6751d1e…`) + `migrations/0001_socle.sql` ; comptes
+  (inscription d'entreprise, connexion, sessions, changement d'entreprise, mot de passe), invitations par
+  lien à usage unique (y compris double clic), répartiteur `/api/rpc/<nom>` (session, entreprise, appareil
+  bloqué, rôles), 16 fonctions du socle (`lg_me`, équipe et rôles, chauffeurs, lieux, réglages, appareils).
+  Interface : mode `api`, écran connexion / « Créer mon entreprise », page `/invitation/<jeton>`, carte
+  « Inviter par lien » (WhatsApp). 12 tests serveur (isolation entre entreprises, refus sans session de
+  toute fonction, blocage d'appareil côté serveur, CSRF).
+- **Vérifié** : en local (aperçu `logistics-full` : inscription → accueil propriétaire ; invitation →
+  préparatrice qui ne voit que Préparation et Entrepôt) et **sur Cloudflare**
+  (https://complet.nexus-logistics-6my.pages.dev : inscription, `lg_me`, refus sans session ; données
+  d'essai effacées ensuite). La démo de logistique.nexusmarket.sn reste en place jusqu'à la bascule (C6).
+- **Prochaine étape** : routine cloud qui réalise C2, C3… (un cycle par passage, `git pull` local après).
+
 ## 08/10/2026 — Domaine logistique.nexusmarket.sn en service
 - Domaine rattaché au projet Pages `nexus-logistics` (API Pages, jeton wrangler) puis enregistrement DNS
   `CNAME logistique → nexus-logistics-6my.pages.dev` (proxifié) créé avec un jeton « Modifier le DNS de la
@@ -404,10 +427,15 @@ Dépôt git initialisé, aucun commit.
   (`vars.texte`, modèles modifiables) ; envoi codé côté NEXUS (WhatsApp, e-mail Brevo en secours,
   `lg-fallback.js`) — actif dès que les migrations seront appliquées.
 - Planificateur : `lg_watchdog`, `lg_vendor_reminders`, `lg_purge`, `lg_evening_report` prêts, non planifiés.
-- Hébergement : Cloudflare Pages `nexus-logistics`, **https://logistique.nexusmarket.sn** (démo tant que
-  `VITE_SUPABASE_*` ne sont pas posées ; déploiement automatique bloqué faute de `CLOUDFLARE_API_TOKEN`).
+- Hébergement : Cloudflare Pages `nexus-logistics`, **https://logistique.nexusmarket.sn** = démo (PGlite)
+  jusqu'à la bascule du cycle C6 ; version complète en prévisualisation sur
+  https://complet.nexus-logistics-6my.pages.dev (Functions + D1 `nexus-logistics`). Déploiement automatique
+  bloqué faute de `CLOUDFLARE_API_TOKEN` (déploiement à la main).
+- Base de la version complète : D1 `nexus-logistics` (migration 0001 appliquée). La base Supabase de NEXUS
+  n'est plus la cible : les migrations `supabase/` ne seront PAS appliquées (archive de référence).
 
 ## Chantiers en attente
+- **Portage Cloudflare : cycles C2 à C11 de `ROADMAP.md`** (le reste de cette liste vient après).
 - Connexion chauffeur par téléphone + code à 4 chiffres (exige une fonction serveur qui
   émet la session ; colonne `couriers.pin_hash` prévue).
 - PDF de facture généré côté serveur et archivé (aujourd'hui : impression navigateur).

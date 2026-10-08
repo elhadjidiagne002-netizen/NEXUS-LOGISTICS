@@ -48,6 +48,7 @@ function Root() {
   const { path } = useNav();
   useTheme();
   if (path.startsWith('/suivi/')) return <Suspense fallback={<div className="app"><Loading /></div>}><Track token={path.split('/')[2]} /></Suspense>;
+  if (MODE === 'api' && path.startsWith('/invitation/')) return <Invitation token={path.split('/')[2]} />;
   return <Authed />;
 }
 
@@ -156,7 +157,7 @@ function Login({ error }) {
           <button key={u.id} className="role-card" onClick={async () => (await backend()).signIn(u.id)}>
             <span className="chip-ico" style={{ width: 40, height: 40 }}><Icon name={ROLE_ICON[u.label] ?? (u.label.startsWith('Chauffeur') ? 'bike' : 'user')} /></span>
             <span><b>{u.name}</b><span>{u.label}</span></span></button>)}</div>
-      </> : <form className="stack" onSubmit={signIn}>
+      </> : MODE === 'api' ? <ApiAuth initialError={err} /> : <form className="stack" onSubmit={signIn}>
         <h1>Connexion</h1><p className="muted" style={{ marginTop: -6 }}>Votre compte NEXUS Market. Les rôles logistiques sont attribués par l'administrateur.</p>
         <Field label="E-mail"><input className="input" type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required /></Field>
         <Field label="Mot de passe"><input className="input" type="password" autoComplete="current-password" value={pw} onChange={(e) => setPw(e.target.value)} required /></Field>
@@ -165,6 +166,70 @@ function Login({ error }) {
       <SuiteNexus where="connexion" />
     </main>
   </div>;
+}
+
+// Version complète (Cloudflare) : connexion ou création d'une entreprise de livraison
+const COMPANY_KINDS = [['livraison', 'Société de livraison'], ['boutique', 'Boutique qui livre ses clients'], ['vendeur', 'Vendeur en ligne'], ['autre', 'Autre']];
+function ApiAuth({ initialError }) {
+  const [mode, setMode] = useState('login');
+  const [f, setF] = useState({ email: '', password: '', name: '', phone: '', company: '', kind: 'livraison', city: 'Dakar' });
+  const [err, setErr] = useState(initialError); const [busy, setBusy] = useState(false);
+  const s = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  const submit = async (e) => {
+    e.preventDefault(); setBusy(true); setErr(null);
+    try {
+      const b = await backend();
+      if (mode === 'login') await b.signIn(f.email, f.password);
+      else await b.register({ email: f.email, password: f.password, name: f.name, phone: f.phone, company: { name: f.company, kind: f.kind, city: f.city, phone: f.phone } });
+    } catch (x) { setErr(x); } finally { setBusy(false); }
+  };
+  return <form className="stack" onSubmit={submit}>
+    <h1>{mode === 'login' ? 'Connexion' : 'Créer mon entreprise'}</h1>
+    <p className="muted" style={{ marginTop: -6 }}>{mode === 'login' ? 'Votre compte NEXUS Logistics. Une invitation reçue ? Ouvrez son lien.'
+      : 'Gratuit pour démarrer. Vous invitez ensuite votre équipe et vos chauffeurs par un lien WhatsApp.'}</p>
+    {mode === 'register' && <>
+      <Field label="Nom de l'entreprise"><input className="input" value={f.company} onChange={s('company')} required maxLength={120} /></Field>
+      <Field label="Activité"><select className="input" value={f.kind} onChange={s('kind')}>{COMPANY_KINDS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
+      <div className="grid cols-2" style={{ gap: 10 }}>
+        <Field label="Ville"><input className="input" value={f.city} onChange={s('city')} maxLength={60} /></Field>
+        <Field label="Téléphone"><input className="input" type="tel" value={f.phone} onChange={s('phone')} placeholder="77 000 00 00" /></Field></div>
+      <Field label="Votre nom"><input className="input" autoComplete="name" value={f.name} onChange={s('name')} required maxLength={80} /></Field></>}
+    <Field label="E-mail"><input className="input" type="email" autoComplete="username" value={f.email} onChange={s('email')} required /></Field>
+    <Field label="Mot de passe"><input className="input" type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} value={f.password} onChange={s('password')} required minLength={mode === 'login' ? undefined : 8} /></Field>
+    {err && <div className="flash bad">{errText(err)}</div>}
+    <Btn kind="primary" type="submit" size="xl" disabled={busy}>{mode === 'login' ? 'Se connecter' : "Créer l'entreprise"}</Btn>
+    <Btn kind="ghost" type="button" onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setErr(null); }}>
+      {mode === 'login' ? 'Pas encore de compte ? Créer mon entreprise' : "J'ai déjà un compte : me connecter"}</Btn>
+  </form>;
+}
+
+// Lien d'invitation (/invitation/<jeton>) : rejoindre une entreprise, avec un compte neuf ou existant
+const INVITE_ROLE = { admin: 'administrateur', staff: "membre de l'équipe", vendor: 'vendeur', courier: 'chauffeur-livreur' };
+function Invitation({ token }) {
+  const { go } = useNav();
+  const [inv, setInv] = useState(null); const [err, setErr] = useState(null); const [busy, setBusy] = useState(false);
+  const [f, setF] = useState({ email: '', password: '', name: '', phone: '' });
+  useEffect(() => {
+    backend().then((b) => b.invitation(token)).then((r) => { setInv(r); setF((x) => ({ ...x, name: r.name ?? '' })); }).catch(setErr);
+  }, [token]);
+  const s = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  return <div className="login-wrap" style={{ gridTemplateColumns: '1fr', placeItems: 'center' }}>
+    <main className="login-form" style={{ maxWidth: 460 }}>
+      <div className="brand" style={{ marginBottom: 20 }}><Logo size={42} /><span>NEXUS Logistics<small>Invitation</small></span></div>
+      {!inv ? (err ? <div className="flash bad">{errText(err)}</div> : <Loading />) : <form className="stack" onSubmit={async (e) => {
+        e.preventDefault(); setBusy(true); setErr(null);
+        try { await (await backend()).acceptInvite(token, f); go('/'); } catch (x) { setErr(x); } finally { setBusy(false); }
+      }}>
+        <h1>Rejoindre {inv.company}</h1>
+        <p className="muted" style={{ marginTop: -6 }}>Vous êtes invité comme <b>{INVITE_ROLE[inv.role]}</b>{inv.staff_roles?.length ? ` (${inv.staff_roles.map((r) => ROLE_FR[r]).join(', ')})` : ''}.
+          Déjà un compte NEXUS Logistics ? Saisissez son e-mail et son mot de passe.</p>
+        <Field label="Votre nom"><input className="input" value={f.name} onChange={s('name')} maxLength={80} /></Field>
+        <Field label="Téléphone"><input className="input" type="tel" value={f.phone} onChange={s('phone')} /></Field>
+        <Field label="E-mail"><input className="input" type="email" autoComplete="username" value={f.email} onChange={s('email')} required /></Field>
+        <Field label="Mot de passe"><input className="input" type="password" autoComplete="new-password" value={f.password} onChange={s('password')} required /></Field>
+        {err && <div className="flash bad">{errText(err)}</div>}
+        <Btn kind="primary" type="submit" size="xl" disabled={busy}>Rejoindre</Btn></form>}
+    </main></div>;
 }
 
 function Shell({ me }) {
@@ -193,7 +258,7 @@ const initials = (n) => (n ?? '?').split(/\s+/).map((x) => x[0]).slice(0, 2).joi
 function Sidebar({ me, tiles, path }) {
   const groups = [...new Set(tiles.map((t) => t.group))];
   return <aside className="sidebar" aria-label="Menu">
-    <Link to="/" className="brand"><Logo size={34} /><span>NEXUS Logistics<small style={{ color: '#64748b' }}>{MODE === 'demo' ? 'Démonstration' : 'NEXUS Market'}</small></span></Link>
+    <Link to="/" className="brand"><Logo size={34} /><span>NEXUS Logistics<small style={{ color: '#64748b' }}>{MODE === 'demo' ? 'Démonstration' : me.company?.name ?? 'NEXUS Market'}</small></span></Link>
     <Link to="/" className={`side-link ${path === '/' ? 'on' : ''}`}><Icon name="home" />Accueil</Link>
     {groups.map((g) => <React.Fragment key={g}><div className="side-label">{g}</div>
       {tiles.filter((t) => t.group === g).map((t) => <Link key={t.to} to={t.to} className={`side-link ${path.startsWith(t.to) ? 'on' : ''}`}>
@@ -271,7 +336,7 @@ function TopBar({ me }) {
           <label className="check"><input type="checkbox" checked={off} onChange={(e) => { setSimulatedOffline(e.target.checked); setOff(e.target.checked); if (!e.target.checked) flush(); }} /> Simuler une coupure réseau</label>
           <div className="row"><Btn onClick={async () => (await backend()).signOut()}><Icon name="users" size={18} />Changer de rôle</Btn>
             <Btn kind="bad" onClick={async () => { if (confirm('Effacer la base de démonstration et recommencer la journée ?')) (await backend()).reset(); }}>Réinitialiser la démo</Btn></div></Card>}
-        {MODE === 'supabase' && <Btn onClick={async () => (await backend()).signOut()}><Icon name="logout" size={18} />Se déconnecter</Btn>}
+        {MODE !== 'demo' && <Btn onClick={async () => (await backend()).signOut()}><Icon name="logout" size={18} />Se déconnecter</Btn>}
       </div></Modal>}
   </header>;
 }

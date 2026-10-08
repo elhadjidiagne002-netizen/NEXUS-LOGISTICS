@@ -6,9 +6,13 @@
   "description": "NEXUS LOGISTICS — de la commande payée à la livraison encaissée",
   "scripts": {
     "dev": "vite",
+    "dev:api": "vite --mode api",
+    "api": "node --no-warnings scripts/api-dev.mjs",
     "build": "vite build",
+    "build:api": "vite build --mode api",
     "preview": "vite preview --port 5610",
-    "test": "node --test \"test/**/*.test.mjs\"",
+    "test": "node --no-warnings --test \"test/**/*.test.mjs\" \"test/server/*.test.js\"",
+    "test:server": "node --no-warnings --test \"test/server/*.test.js\"",
     "test:sql": "node --test \"test/sql/*.test.mjs\"",
     "test:unit": "node --test \"test/unit/*.test.mjs\""
   },

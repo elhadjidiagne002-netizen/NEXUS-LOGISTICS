@@ -1,6 +1,6 @@
 // Modules 10, 12, 15 — Flotte, tarifs et zones, rôles et réglages.
 import React, { useState } from 'react';
-import { rpc } from '../lib/backend.js';
+import { rpc, MODE } from '../lib/backend.js';
 import { useMe, ROLE_FR } from '../App.jsx';
 import { Icon, useRpc, useAction, Btn, Card, Badge, Empty, Loading, ErrorBox, PageHead, Modal, Field, Tabs, Chips, StatusBadge, formatF, dmy } from '../components/ui.jsx';
 
@@ -35,7 +35,38 @@ function Staff() {
         <Field label="Lieu"><select className="input" value={pick.hub} onChange={(e) => setPick({ ...pick, hub: e.target.value })}><option value="">Tous les lieux</option>{hubs.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}</select></Field>
         <Btn kind="primary" onClick={() => run(async () => { const r = await rpc('lg_grant_role', { p_user: pick.u.id, p_role: pick.role, p_hub: pick.hub || null }); setPick(null); reload(); return r; }, { ok: 'Rôle attribué' })}>Attribuer</Btn>
         <p className="small muted">Un même compte peut cumuler deux rôles. Les chauffeurs sont les livreurs déjà inscrits (table couriers).</p></div>}</Card>
+    {MODE === 'api' && <Invite />}
   </div>;
+}
+
+// Version complète : inviter une personne par un lien (à envoyer par WhatsApp), valable 7 jours, à usage unique
+const INVITE_KINDS = [['staff', 'Équipe'], ['courier', 'Chauffeur-livreur'], ['vendor', 'Vendeur'], ['admin', 'Administrateur']];
+function Invite() {
+  const me = useMe();
+  const [f, setF] = useState({ role: 'staff', staff: ['picker'], name: '', phone: '' });
+  const [link, setLink] = useState(null);
+  const [run, busy] = useAction();
+  const toggle = (r) => setF({ ...f, staff: f.staff.includes(r) ? f.staff.filter((x) => x !== r) : [...f.staff, r] });
+  const msg = link && `Bonjour${f.name ? ` ${f.name}` : ''}, ${me.company?.name ?? 'notre entreprise'} vous invite sur NEXUS Logistics : ${link}`;
+  const wa = link && `https://wa.me/${f.phone.replace(/\D/g, '').replace(/^(7\d{8})$/, '221$1')}?text=${encodeURIComponent(msg)}`;
+  return <Card><h3>Inviter par lien</h3>
+    <div className="stack">
+      <Chips options={INVITE_KINDS.filter(([k]) => k !== 'admin' || me.is_owner)} value={f.role} onChange={(role) => { setF({ ...f, role }); setLink(null); }} />
+      {f.role === 'staff' && <div className="chips">{Object.entries(ROLE_FR).map(([k, l]) =>
+        <label key={k} className="check"><input type="checkbox" checked={f.staff.includes(k)} onChange={() => toggle(k)} /> {l}</label>)}</div>}
+      <div className="grid cols-2" style={{ gap: 10 }}>
+        <Field label="Nom (facultatif)"><input className="input" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
+        <Field label="WhatsApp (facultatif)"><input className="input" type="tel" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} placeholder="77 000 00 00" /></Field></div>
+      <Btn kind="primary" disabled={busy} onClick={() => run(async () => {
+        const r = await rpc('lg_invite_create', { p_role: f.role, p_staff_roles: f.role === 'staff' ? f.staff : [], p_name: f.name || null });
+        setLink(location.origin + r.path); return r;
+      }, { ok: 'Lien créé' })}>Créer le lien d'invitation</Btn>
+      {link && <div className="card flat ok"><div className="mono small" style={{ wordBreak: 'break-all' }}>{link}</div>
+        <div className="row" style={{ marginTop: 8 }}>
+          <Btn size="sm" onClick={() => navigator.clipboard?.writeText(link)}>Copier</Btn>
+          <a className="btn sm primary" href={wa} target="_blank" rel="noopener">Envoyer par WhatsApp</a></div>
+        <p className="small muted" style={{ margin: '6px 0 0' }}>Valable 7 jours, une seule fois. La personne choisit son mot de passe.</p></div>}
+    </div></Card>;
 }
 
 const KINDS = ['vélo', 'moto', 'tricycle', 'voiture', 'fourgonnette', 'camion'];
