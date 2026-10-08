@@ -2,6 +2,21 @@
 
 Le plus récent en premier.
 
+## 08/10/2026 — Cycle 9 : engagement de délai des vendeurs (module 09, P2)
+- **Engagement explicite** (`lg_vendor_commitments`) : le vendeur promet un délai de préparation
+  (1 à 96 h) dans son espace, ou le chef de quai le fixe pour lui (`lg_vendor_commitment_set`).
+  Tant que le lieu de préparation n'est pas tranché, un vendeur **sans** engagement garde les 24 h
+  par défaut et ne reçoit aucune relance.
+- **Heure limite** : déclencheur sur `lg_pick_tasks` → réception + délai promis (une date promise au
+  client reste prioritaire).
+- **Relances** (`lg_vendor_reminders`, fonction de planificateur, fermée aux apps) : WhatsApp au
+  vendeur 2 h avant l'échéance puis en retard, une fois par étape (`lg_vendor_reminders_sent`),
+  seulement si le hub n'a pas pris la commande. 2 modèles ajoutés à « Messages clients ».
+- **Mesure** : « Mon engagement » dans l'espace vendeur (ponctualité 30 j, délai moyen, commandes
+  ouvertes avec le temps restant) ; Pilotage → « Vendeurs » pour les équipes.
+- À brancher en production : `lg_vendor_reminders()` à côté de `lg_watchdog()` (CLAUDE.md, mise en production §3).
+- Tests : 68/68.
+
 ## 08/10/2026 — Cycle 8 : retours, frais et causes (module 08, P2)
 - **Causes de retour** (`lg_return_causes`) : qui supporte les frais (vendeur, client, NEXUS,
   personne) et combien (aucun, frais de livraison de la commande, montant fixe). **Valeurs proposées
@@ -204,7 +219,7 @@ Dépôt git initialisé, aucun commit.
 - Base : migrations prêtes, **non appliquées** (ni test ni prod).
 - Messages : déposés dans `notification_outbox` (événements `lg_*`) **avec leur texte final**
   (`vars.texte`, modèles modifiables) ; l'envoi WhatsApp par le pipeline NEXUS reste à brancher.
-- Planificateur : `lg_watchdog`, `lg_purge`, `lg_evening_report` prêts, non planifiés.
+- Planificateur : `lg_watchdog`, `lg_vendor_reminders`, `lg_purge`, `lg_evening_report` prêts, non planifiés.
 - Hébergement : non déployé.
 
 ## Chantiers en attente

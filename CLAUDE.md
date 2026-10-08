@@ -73,8 +73,8 @@ base Supabase** (projet `pqcqbstbdujzaclsiosv`). Toute la logique métier est en
     un fichier de script.
 
 ## Tests
-- `npm test` : 65 tests (PGlite = Postgres 18 en WebAssembly, pgcrypto inclus), dont un
-  fichier par cycle (`test/sql/cycle1..8.test.mjs`) qui part de la journée de démo.
+- `npm test` : 68 tests (PGlite = Postgres 18 en WebAssembly, pgcrypto inclus), dont un
+  fichier par cycle (`test/sql/cycle1..9.test.mjs`) qui part de la journée de démo.
 - `test/helpers/db.mjs` : `createDb()` charge le miroir + migrations + données ;
   `rpc(uid, nom, args)` appelle comme `supabase.rpc` sous l'identité `uid`.
 - Le miroir `supabase/stub/prod_subset.sql` a été relevé **en lecture seule** sur la prod
@@ -90,7 +90,7 @@ base Supabase** (projet `pqcqbstbdujzaclsiosv`). Toute la logique métier est en
    (réglage `invoice_issuer`), nombre de présentations (`max_attempts`).
 3. Brancher : envoi des événements `lg_*` de `notification_outbox` (modèles WhatsApp de
    l'annexe B à ajouter côté `functions/api/_lib/notify.js` de NEXUS) ; `lg_handle_reply`
-   dans le webhook WhatsApp entrant ; `lg_watchdog()` (toutes les 5 min) et `lg_purge()`
+   dans le webhook WhatsApp entrant ; `lg_watchdog()` et `lg_vendor_reminders()` (toutes les 5 min) et `lg_purge()`
    + `lg_evening_report()` dans `nexus_cron_horaire()` (CLAUDE.md NEXUS §18 : une seule
    fenêtre d'écriture par heure).
 4. Déployer `dist/` sur Cloudflare Pages (`npm run build`), variables `VITE_SUPABASE_*`.

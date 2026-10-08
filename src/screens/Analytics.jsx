@@ -12,8 +12,8 @@ export default function Analytics() {
   const [tab, setTab] = useState('kpis');
   return <>
     <PageHead title="Pilotage" back="/" sub="Mesurer ce qui coûte et ce qui fâche, anticiper la charge, repérer les dérives." />
-    <Tabs value={tab} onChange={setTab} tabs={[['kpis', 'Indicateurs'], ['forecast', 'Prévision'], ['anomalies', 'Anomalies'], ['drivers', 'Chauffeurs'], ['picking', 'Préparation'], ['returns', 'Retours']]} />
-    {tab === 'kpis' && <Kpis />}{tab === 'forecast' && <Forecast />}{tab === 'anomalies' && <Anomalies />}{tab === 'drivers' && <Leaderboard />}{tab === 'picking' && <PickProductivity />}{tab === 'returns' && <ReturnStats />}
+    <Tabs value={tab} onChange={setTab} tabs={[['kpis', 'Indicateurs'], ['forecast', 'Prévision'], ['anomalies', 'Anomalies'], ['drivers', 'Chauffeurs'], ['picking', 'Préparation'], ['returns', 'Retours'], ['vendors', 'Vendeurs']]} />
+    {tab === 'kpis' && <Kpis />}{tab === 'forecast' && <Forecast />}{tab === 'anomalies' && <Anomalies />}{tab === 'drivers' && <Leaderboard />}{tab === 'picking' && <PickProductivity />}{tab === 'returns' && <ReturnStats />}{tab === 'vendors' && <VendorCommitments />}
   </>;
 }
 
@@ -165,5 +165,20 @@ function ReturnStats() {
       <Btn kind="primary" disabled={busy} onClick={() => run(async () => {
         const r = await rpc('lg_return_cause_save', { p: { ...edit, fee_fcfa: Number(edit.fee_fcfa) || 0 } }); setEdit(null); causes.reload(); return r;
       }, { ok: 'Cause enregistrée' })}>Enregistrer</Btn></div></Modal>}
+  </div>;
+}
+
+// Engagement de délai des vendeurs : promesse, ponctualité, retards en cours, relances
+function VendorCommitments() {
+  const { data, error, loading } = useRpc('lg_vendor_commitments_list', { p_days: 30 });
+  if (loading && !data) return <Loading />;
+  return <div className="stack"><ErrorBox error={error} />
+    <Card><div className="scroll-x"><table className="tbl"><thead><tr><th>Vendeur</th><th className="num">Délai promis</th><th className="num">Préparées (30 j)</th>
+      <th className="num">À l'heure</th><th className="num">Délai moyen</th><th className="num">Ouvertes · en retard</th><th className="num">Relances</th></tr></thead>
+      <tbody>{(data ?? []).map((v) => <tr key={v.vendor_id}><td>{v.name}</td><td className="num">{v.prep_hours ? `${v.prep_hours} h` : <span className="muted">aucun</span>}</td>
+        <td className="num">{v.done}</td><td className="num" style={{ color: v.on_time_pct != null && v.on_time_pct < 80 ? 'var(--bad)' : undefined }}>{v.on_time_pct ?? '—'}{v.on_time_pct != null && ' %'}</td>
+        <td className="num">{v.avg_hours != null ? `${v.avg_hours} h` : '—'}</td><td className="num">{v.open} · <b style={{ color: v.open_late ? 'var(--bad)' : undefined }}>{v.open_late}</b></td>
+        <td className="num">{v.reminders}</td></tr>)}</tbody></table></div></Card>
+    <p className="small muted">Le vendeur fixe son délai dans son espace (ou le chef de quai pour lui). « À l'heure » : commande prête avant l'heure limite.</p>
   </div>;
 }

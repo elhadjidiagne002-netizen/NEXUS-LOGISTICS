@@ -21,11 +21,12 @@ export default function Vendor() {
       <Stat label="taux de rupture (30 j)" value={o.stockout_pct_30d != null ? `${o.stockout_pct_30d} %` : '—'} kind={o.stockout_pct_30d > 5 ? 'bad' : ''} />
       <Stat label="fiches à compléter" value={o.products_missing_data} kind={o.products_missing_data ? 'todo' : 'ok'} />
     </div>
-    <div style={{ marginTop: 12 }}><Tabs value={tab} onChange={setTab} tabs={[['packages', 'Mes colis'], ['products', 'Fiches produit'], ['lots', `Péremption${lots.data?.length ? ` (${lots.data.length})` : ''}`]]} /></div>
+    <div style={{ marginTop: 12 }}><Tabs value={tab} onChange={setTab} tabs={[['packages', 'Mes colis'], ['commitment', 'Mon engagement'], ['products', 'Fiches produit'], ['lots', `Péremption${lots.data?.length ? ` (${lots.data.length})` : ''}`]]} /></div>
     {tab === 'packages' && <Card>{o.packages.length === 0 ? <Empty>Aucun colis ces 30 derniers jours.</Empty> :
       <div className="list">{o.packages.map((p) => <div key={p.code} className="line"><span className="mono">{p.code}</span>
         <span className="grow small muted">Cde {p.order_short} · {p.zone ?? ''} · {ago(p.updated_at)}</span>{p.attempts > 0 && <Badge kind="todo">{p.attempts} échec(s)</Badge>}<StatusBadge s={p.status} /></div>)}</div>}</Card>}
     {tab === 'products' && <Products />}
+    {tab === 'commitment' && <Commitment />}
     {tab === 'lots' && <Card><ErrorBox error={lots.error} />{!lots.data?.length ? <Empty>Aucun de vos lots ne périme dans les 30 prochains jours.</Empty> :
       <div className="list">{lots.data.map((l) => <div key={l.id} className="line"><span className={`dot ${l.state === 'expired' ? 'bad' : 'todo'}`} />
         <span className="grow"><b>{l.product}</b><div className="small muted">{l.lot ? `lot ${l.lot}` : 'sans n° de lot'} · {l.qty} unité(s) à l'entrepôt</div></span>
@@ -83,4 +84,36 @@ function Products() {
             <div className="row"><Btn kind="primary" onClick={() => save(p)}>Enregistrer</Btn><Btn kind="ghost" onClick={() => setEdit({ ...edit, [p.id]: undefined })}>Annuler</Btn></div></div>}
       </Card>;
     })}</div>;
+}
+
+// Engagement de délai (P2) : le vendeur promet un délai de préparation, mesuré et relancé
+const left = (m) => (m < 0 ? `en retard de ${fmtMin(-m)}` : `reste ${fmtMin(m)}`);
+const fmtMin = (m) => (m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}` : `${m} min`);
+function Commitment() {
+  const { data: c, error, loading, reload } = useRpc('lg_my_commitment', {}, { refresh: 60000 });
+  const [hours, setHours] = useState('');
+  const [run, busy] = useAction();
+  if (loading && !c) return <Loading />;
+  if (error) return <ErrorBox error={error} />;
+  const save = (h) => run(async () => { const r = await rpc('lg_vendor_commitment_set', { p_hours: h }); setHours(''); reload(); return r; },
+    { ok: h ? 'Engagement enregistré' : 'Engagement retiré' });
+  return <div className="stack">
+    <Card><h3>Mon délai de préparation</h3>
+      {c.prep_hours ? <p style={{ margin: '0 0 10px' }}>Je m'engage à préparer chaque commande en <b>{c.prep_hours} h</b> au plus. Vous êtes prévenu par WhatsApp 2 h avant l'échéance, puis en cas de retard.</p>
+        : <p className="muted" style={{ margin: '0 0 10px' }}>Aucun engagement : vos commandes ont 24 h par défaut et vous ne recevez pas de rappel.</p>}
+      <div className="row"><Chips options={[['4', '4 h'], ['8', '8 h'], ['12', '12 h'], ['24', '24 h'], ['48', '48 h']]} value={hours || String(c.prep_hours ?? '')} onChange={setHours} />
+        <Btn kind="primary" disabled={busy || !hours || Number(hours) === c.prep_hours} onClick={() => save(Number(hours))}>Enregistrer</Btn>
+        {c.prep_hours && <Btn kind="ghost" disabled={busy} onClick={() => save(null)}>Retirer</Btn>}</div>
+      <p className="small muted">Le délai s'applique aux nouvelles commandes. Il est affiché aux équipes NEXUS avec votre ponctualité.</p></Card>
+    <div className="stats">
+      <Stat label="à l'heure (30 j)" value={c.on_time_pct != null ? `${c.on_time_pct} %` : '—'} kind={c.on_time_pct == null ? '' : c.on_time_pct >= 90 ? 'ok' : 'todo'} />
+      <Stat label="commandes préparées" value={c.done} />
+      <Stat label="délai moyen" value={c.avg_hours != null ? `${c.avg_hours} h` : '—'} />
+      <Stat label="en retard maintenant" value={c.open_late} kind={c.open_late ? 'bad' : 'ok'} />
+    </div>
+    <Card><h3>À préparer</h3>{!c.tasks.length ? <Empty>Aucune commande en attente.</Empty> :
+      <div className="list">{c.tasks.map((x) => <div key={x.task_id} className="line"><span className="mono">{x.order_short}</span>
+        <span className="grow small muted">{x.status === 'picking' ? 'en cours' : 'à faire'}</span>
+        {x.minutes_left != null && <Badge kind={x.minutes_left < 0 ? 'bad' : x.minutes_left < 120 ? 'todo' : 'info'}>{left(x.minutes_left)}</Badge>}</div>)}</div>}</Card>
+  </div>;
 }

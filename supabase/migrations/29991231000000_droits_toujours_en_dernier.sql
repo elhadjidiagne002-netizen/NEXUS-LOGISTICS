@@ -57,6 +57,7 @@ declare
     'lg_my_waves', 'lg_inventory_today', 'lg_inventory_count', 'lg_inventory_history', 'lg_product_location',
     'lg_lots_expiring', 'lg_lot_discard', 'lg_lot_trace', 'lg_pick_productivity',
     'lg_return_causes', 'lg_return_cause_save', 'lg_return_classify', 'lg_return_stats',
+    'lg_vendor_commitment_set', 'lg_my_commitment', 'lg_vendor_commitments_list',
     -- chauffeur
     'lg_trip_start', 'lg_my_day', 'lg_stop_call', 'lg_stop_arrive', 'lg_deliver', 'lg_fail', 'lg_trip_finish',
     'lg_driver_ping', 'lg_sos', 'lg_add_expense', 'lg_vehicle_check',
