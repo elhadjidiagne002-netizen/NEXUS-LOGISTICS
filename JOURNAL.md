@@ -2,6 +2,22 @@
 
 Le plus récent en premier.
 
+## 08/10/2026 — Tableau de bord d'administration de la plateforme (/admin/)
+- **Demande** : gérer l'intégralité du site avec les mêmes identifiants administrateur que les autres sites NEXUS
+  (compte elhadjidiagne002@gmail.com).
+- **Fait** : page séparée https://logistique.nexusmarket.sn/admin/ ; connexion avec le **compte Devizo** (base devizo
+  en lecture seule, `AUTH_DB`, même code que My shop), adresse obligatoirement dans `ADMIN_EMAILS` ; session
+  d'administration à part (12 h), journal de toutes les actions (`admin_audit`, migration `0012_admin.sql`).
+  Rubriques : vue d'ensemble (à regarder : paiements, tâches en retard, suspensions), entreprises (coordonnées,
+  formule offerte ou prolongée, suspension, membres et rôles, transfert de propriété, retrait, clés d'API, adresse de
+  rappel, commandes, abonnement, activité, réglages), comptes (recherche, déconnexion partout, suspension), commandes
+  de toutes les entreprises, abonnements à valider, formules et numéros de paiement, messages (échecs, attente),
+  système (tâches planifiées, volumes, configuration), erreurs, journal. 10 nouvelles fonctions de plateforme.
+- **Vérifié** : compte Devizo de l'administrateur présent et actif (lecture seule) ; 3 tests (connexion refusée hors
+  ADMIN_EMAILS / compte suspendu / mauvais mot de passe, isolement des fonctions de plateforme, parcours complet
+  dont transfert de propriété et journal) ; 95 tests au total ; toutes les rubriques ouvertes dans l'aperçu local,
+  sans débordement sur téléphone.
+
 ## 08/10/2026 — Tâches planifiées confiées à nexus-cron (accord de l'utilisateur)
 - Le Worker dédié n'étant jamais déclenché par Cloudflare, **`nexus-cron`** (planificateur de NEXUS Market, fiable,
   alertes Sentry) appelle désormais `watchdog`, `reminders`, `messages` à chaque passage, `purge` à l'heure pile et

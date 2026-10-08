@@ -27,6 +27,15 @@ Plan et état : **`ROADMAP.md`**. Historique : `JOURNAL.md`.
 - **Secrets Pages** (jamais dans le dépôt) : `CRON_SECRET`, `SECRETS_KEY` (chiffre les jetons WhatsApp des
   entreprises : **ne jamais la changer**, les jetons enregistrés deviendraient illisibles), `ADMIN_EMAILS`
   (administration de la plateforme), `BREVO_API_KEY` facultatif.
+- **Administration de la plateforme : https://logistique.nexusmarket.sn/admin/** (page à part, `admin/index.html` →
+  `src/admin/`), comme My shop et CV en ligne : connexion avec le **compte Devizo** (même e-mail et mot de passe ;
+  base `devizo` reliée en **lecture seule** par `AUTH_DB`, `server/devizo.js`, jamais d'écriture ni de migration
+  dessus) et e-mail obligatoirement dans `ADMIN_EMAILS` (revérifié à chaque appel). Session à part (cookie
+  `lg_admin`, `/api/admin`, 12 h) qui ne donne accès qu'aux fonctions `roles: 'platform'` via
+  `/api/admin/rpc/<nom>` (`server/routes/admin.js`) ; toute fonction sans `read: true` est écrite dans
+  `admin_audit`. Nouvelle fonction d'administration → `server/rpc/plateforme.js` (rôle `platform`, sans filtre
+  d'entreprise, voulu). En local : `.dev.vars` (ignoré par git) avec `DEV_ADMIN_EMAIL` / `DEV_ADMIN_PASSWORD`
+  → `scripts/api-dev.mjs` simule la base Devizo.
 - **Historique** : la version Postgres d'origine (`supabase/`, `test/sql/`, mode démo PGlite) a été supprimée
   après portage complet ; pour relire sa logique : `git show 708861b:supabase/migrations/<fichier>`.
 

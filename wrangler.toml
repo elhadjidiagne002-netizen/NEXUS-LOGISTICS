@@ -14,6 +14,15 @@ database_name = "nexus-logistics"
 database_id = "b6751d1e-0d5f-44a7-b24a-b54ee6f136cf"
 migrations_dir = "migrations"
 
+# Comptes administrateur = comptes Devizo (même e-mail / mot de passe que Devizo, My shop et CV en ligne), LECTURE
+# seule (server/devizo.js). Jamais d'écriture dans la base Devizo ; ne jamais y appliquer nos migrations.
+# Seuls les e-mails de la variable ADMIN_EMAILS accèdent à /admin/.
+[[d1_databases]]
+binding = "AUTH_DB"
+database_name = "devizo"
+database_id = "b0f888bd-a0d2-4a1d-b731-ac9d68635b4b"
+migrations_dir = "migrations-auth-inexistant"
+
 # Photos et signatures de preuve (cycle C5). Sans cette liaison, elles sont gardées dans la table `files` de D1
 # (repli gratuit, ≤ 1,5 Mo par fichier). Pour passer à R2 (10 Go gratuits) : créer le compartiment
 #   npx wrangler r2 bucket create nexus-logistics-preuves

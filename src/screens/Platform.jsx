@@ -26,7 +26,7 @@ export default function Platform() {
   </>;
 }
 
-function Companies({ list, reload }) {
+export function Companies({ list, reload }) {
   const [run, busy] = useAction();
   if (!list.length) return <Card><Empty>Aucune entreprise.</Empty></Card>;
   return <Card><div className="scroll-x"><table className="tbl"><thead><tr><th>Entreprise</th><th>Propriétaire</th><th>Formule</th><th className="num">Membres</th>
@@ -38,7 +38,7 @@ function Companies({ list, reload }) {
         && run(async () => { const r = await rpc('lg_platform_company_set', { p_company: c.id, p_suspend: !c.suspended }); reload(); return r; })}>{c.suspended ? 'Rétablir' : 'Suspendre'}</Btn></td></tr>)}</tbody></table></div></Card>;
 }
 
-function Payments({ list, reload }) {
+export function Payments({ list, reload }) {
   const [run, busy] = useAction();
   if (!list.length) return <Card><Empty>Aucun paiement déclaré.</Empty></Card>;
   return <div className="grid cols-2">{list.map((p) => <Card key={p.id} kind={p.status === 'pending' ? 'todo' : ''}>
@@ -51,7 +51,7 @@ function Payments({ list, reload }) {
   </Card>)}</div>;
 }
 
-function Settings({ s, reload }) {
+export function Settings({ s, reload }) {
   const [f, setF] = useState(s);
   const [run, busy] = useAction();
   const num = (plan, k) => <Field label={k === 'price_fcfa' ? 'Prix (F / mois)' : { orders_month: 'Commandes par mois', couriers: 'Chauffeurs', hubs: 'Lieux' }[k]}>
@@ -67,7 +67,7 @@ function Settings({ s, reload }) {
   </div>;
 }
 
-function Errors() {
+export function Errors() {
   const { data, error, loading } = useRpc('lg_platform_errors', { p_limit: 100 });
   if (loading && !data) return <Loading />;
   return <Card><ErrorBox error={error} />{!data?.length ? <Empty icon="check">Aucune erreur remontée.</Empty> :

@@ -79,7 +79,7 @@ export default {
 
   // ----------------------------------------------------------------- plateforme (ADMIN_EMAILS)
   lg_platform_overview: {
-    roles: 'platform',
+    roles: 'platform', read: true,
     async handler(ctx) {
       const d30 = new Date(Date.parse(ctx.now) - 30 * 86400000).toISOString();
       const [cos, pays, errs] = await ctx.db.batch([
@@ -166,7 +166,7 @@ export default {
   },
 
   lg_platform_errors: {
-    roles: 'platform',
+    roles: 'platform', read: true,
     async handler(ctx, a) {
       return (await ctx.db.prepare(`SELECT e.*, c.name AS company FROM client_errors e LEFT JOIN companies c ON c.id = e.company_id ORDER BY e.id DESC LIMIT ?`)
         .bind(Math.min(Math.max(int(a.p_limit) ?? 100, 1), 300)).all()).results;

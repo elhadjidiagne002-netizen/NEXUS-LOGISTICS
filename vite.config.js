@@ -8,6 +8,8 @@ export default defineConfig({
     target: 'es2022',
     chunkSizeWarningLimit: 1500,
     rollupOptions: {
+      // deux pages : l'application (/) et le tableau de bord d'administration (/admin/)
+      input: { main: 'index.html', admin: 'admin/index.html' },
       output: {
         manualChunks: { react: ['react', 'react-dom'], leaflet: ['leaflet'] },
       },

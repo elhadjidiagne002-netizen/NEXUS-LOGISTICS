@@ -23,6 +23,10 @@ export const deviceLabel = () => {
 };
 
 let impl;
+// Préfixe des fonctions : /api/rpc/ (comptes des entreprises) ou /api/admin/rpc/ (tableau de bord /admin/, session
+// d'administration de la plateforme, cf. server/routes/admin.js).
+let RPC_PREFIX = '/api/rpc/';
+export const useAdminRpc = () => { RPC_PREFIX = '/api/admin/rpc/'; };
 const listeners = new Set();
 export const onAuthChange = (fn) => { listeners.add(fn); return () => listeners.delete(fn); };
 const emit = () => listeners.forEach((fn) => fn());
@@ -49,7 +53,7 @@ async function apiImpl() {
   let current = (await call('GET', '/api/auth/session')).session;
   const set = (s) => { current = s; emit(); return s; };
   return {
-    rpc: (name, args = {}) => call('POST', `/api/rpc/${name}`, args),
+    rpc: (name, args = {}) => call('POST', `${RPC_PREFIX}${name}`, args),
     async session() { return current; },
     async signIn(email, password) { return set(await call('POST', '/api/auth/login', { email, password })); },
     async register(form) { return set(await call('POST', '/api/auth/register', form)); },

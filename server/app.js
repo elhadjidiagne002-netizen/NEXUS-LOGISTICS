@@ -7,6 +7,7 @@ import * as files from './routes/files.js';
 import * as cron from './routes/cron.js';
 import * as whatsapp from './routes/whatsapp.js';
 import * as site from './routes/public.js';
+import * as admin from './routes/admin.js';
 
 const ROUTES = [
   ['GET', /^\/api\/health$/, () => json({ ok: true, service: 'nexus-logistics' })],
@@ -26,6 +27,11 @@ const ROUTES = [
   ['GET', /^\/api\/files\/(?<path>[^?#]{8,320})$/, files.get],
   ['POST', /^\/api\/cron\/(?<task>[a-z_]{3,30})$/, cron.run],
   ['POST', /^\/api\/whatsapp\/(?<secret>[\w-]{24,64})$/, whatsapp.incoming],
+  // tableau de bord d'administration (/admin/) : compte Devizo + ADMIN_EMAILS, cf. routes/admin.js
+  ['POST', /^\/api\/admin\/login$/, admin.login],
+  ['POST', /^\/api\/admin\/logout$/, admin.logout],
+  ['GET', /^\/api\/admin\/me$/, admin.me],
+  ['POST', /^\/api\/admin\/rpc\/(?<name>lg_[a-z0-9_]{1,60})$/, admin.rpc],
   ['POST', /^\/api\/rpc\/(?<name>lg_[a-z0-9_]{1,60})$/, (req, env, p) => handleRpc(req, env, p.name)],
 ];
 

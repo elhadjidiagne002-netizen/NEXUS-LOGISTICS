@@ -31,9 +31,10 @@ import messages from './messages.js';
 import offre, { isPlatformAdmin } from './offre.js';
 import webhooks from './webhooks.js';
 import engagements from './engagements.js';
+import plateforme from './plateforme.js';
 
 export const REGISTRY = { ...socle, ...tarifs, ...commandes, ...suivi, ...preparation, ...entrepot, ...flotte, ...voyages,
-  ...terrain, ...retours, ...caisse, ...factures, ...pilotage, ...messages, ...offre, ...webhooks, ...engagements };
+  ...terrain, ...retours, ...caisse, ...factures, ...pilotage, ...messages, ...offre, ...webhooks, ...engagements, ...plateforme };
 
 
 export async function buildContext(request, env) {
