@@ -4,6 +4,7 @@
 // Portage de lg_watchdog (surveillance, toutes les 5 min) et lg_purge (nettoyage, une fois par heure).
 import { HttpError, json } from '../http.js';
 import { sendPending, render, DEFAULT_TEMPLATES } from '../rpc/messages.js';
+import { sendWebhooks } from '../rpc/webhooks.js';
 
 const cfg = (key, def) => `coalesce(json_extract(co.settings, '$.${key}'), ${def})`;
 const minutesSince = (col) => `((julianday(?1) - julianday(${col})) * 1440)`;
@@ -94,7 +95,7 @@ export async function eveningReport(env, now) {
 }
 
 const TASKS = { watchdog: watchdogStatements, purge: purgeStatements };
-const JOBS = { messages: sendPending, evening: eveningReport };
+const JOBS = { messages: async (env, now) => ({ ...(await sendPending(env, now)), ...(await sendWebhooks(env, now)) }), evening: eveningReport };
 
 function sameSecret(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length || a.length < 16) return false;

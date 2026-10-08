@@ -11,6 +11,7 @@ import { alertStatement, maintenanceAlert } from './flotte.js';
 import { OUTSTANDING_SQL } from './caisse.js';
 import { issueInvoice } from './factures.js';
 import { notifyOrder, notifyPerson, sendLater, hhmm } from './messages.js';
+import { webhookStatement } from './webhooks.js';
 
 // Annexe C — motifs d'échec (mêmes codes que lg_failure_reasons et que l'app chauffeur)
 export const FAILURE_REASONS = {
@@ -215,7 +216,7 @@ export default {
         const msgs = [];
         for (const o of rows) {
           const v = { code: o.code, livreur: String(o.courier ?? 'votre livreur').split(' ')[0], heure: hhmm(o.eta) ?? "aujourd'hui" };
-          msgs.push(await notifyOrder(ctx, 'lg_out_for_delivery', o, v));
+          msgs.push(await notifyOrder(ctx, 'lg_out_for_delivery', o, v), webhookStatement(ctx, o.id, 'order.in_transit', { eta: o.eta, courier: v.livreur }));
           if (o.recipient_phone) msgs.push(await notifyPerson(ctx, 'lg_third_party_code', { phone: o.recipient_phone, orderId: o.id },
             { ...v, destinataire: o.recipient_name, prenom: String(o.buyer_name ?? '').split(' ')[0] }));
         }
@@ -384,7 +385,7 @@ export default {
         if (inHand > limit) await alertStatement(ctx, cid, 'cash_limit', 'critical', `Le chauffeur du voyage ${t.number} porte ${inHand} F (plafond ${limit} F)`,
           { trip: t.id, dedupe: `cash_limit:${t.id}` }).run();
         await sendLater(ctx, [await notifyOrder(ctx, 'lg_delivered', o ? { ...o, status: 'delivered', payment_status: 'paid' } : null,
-          { heure: hhmm(ctx.now), facture: invoice ?? '' })]);
+          { heure: hhmm(ctx.now), facture: invoice ?? '' }), webhookStatement(ctx, s.order_id, 'order.delivered', { invoice, proof, collected_fcfa: paid })]);
         const next = await advanceTrip(ctx, t.id);
         return { ok: true, far, distance_m: dist, cash_in_hand_fcfa: inHand, must_remit: inHand > limit, invoice, next_stop: next };
       });
@@ -436,7 +437,8 @@ export default {
         await runBatch(ctx, stmts, 'stop_closed');
         // message au client : choisir un autre jour ou être rappelé (réponse 1, 2 ou 3)
         const ord = await ctx.db.prepare('SELECT * FROM orders WHERE id = ? AND company_id = ?').bind(s.order_id, cid).first();
-        await sendLater(ctx, [await notifyOrder(ctx, 'lg_failed', ord, { heure: hhmm(ctx.now), motif: r.label.toLowerCase() })]);
+        await sendLater(ctx, [await notifyOrder(ctx, 'lg_failed', ord, { heure: hhmm(ctx.now), motif: r.label.toLowerCase() }),
+          webhookStatement(ctx, s.order_id, 'order.failed', { reason: a.p_reason, label: r.label })]);
         const next = await advanceTrip(ctx, t.id);
         return { ok: true, incident_id: incident, next_stop: next };
       });

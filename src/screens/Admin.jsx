@@ -13,7 +13,7 @@ export default function Admin() {
   return <>
     <PageHead title="Administration" back="/" />
     <Tabs tabs={tabs} value={tab} onChange={setTab} />
-    {tab === 'staff' && <Staff />}{tab === 'fleet' && <Fleet />}{tab === 'pricing' && <Pricing />}{tab === 'config' && <Config />}{tab === 'devices' && <Devices />}{tab === 'api' && <ApiKeys />}{tab === 'whatsapp' && <WhatsApp />}{tab === 'plan' && <Plan />}
+    {tab === 'staff' && <Staff />}{tab === 'fleet' && <Fleet />}{tab === 'pricing' && <Pricing />}{tab === 'config' && <Config />}{tab === 'devices' && <Devices />}{tab === 'api' && <><ApiKeys /><Webhook /></>}{tab === 'whatsapp' && <WhatsApp />}{tab === 'plan' && <Plan />}
   </>;
 }
 
@@ -401,4 +401,23 @@ Content-Type: application/json
       <p className="small muted">Réponse : numéro de commande, frais de livraison, lien de suivi à transmettre au client. Renvoyer la même external_ref ne crée pas de doublon.
         Jusqu'à 50 commandes par envoi avec {'{ "orders": [ … ] }'}. Devis au panier : fonction publique lg_quote avec p_company = adresse publique de l'entreprise.</p></Card>
   </div>;
+}
+
+// Adresse de rappel de la boutique : statuts de livraison renvoyés par un appel signé (HMAC-SHA256)
+function Webhook() {
+  const { data, error, reload } = useRpc('lg_webhook_get', {});
+  const [url, setUrl] = useState(''); const [secret, setSecret] = useState(null); const [run, busy] = useAction();
+  return <Card style={{ marginTop: 12 }}><h3>Statuts renvoyés à la boutique</h3><ErrorBox error={error} />
+    <p className="small">À chaque étape (confirmée, préparée, en route, livrée, échec, annulée) d'une commande reçue par l'API, un appel
+      <span className="mono"> POST</span> signé part vers votre adresse : en-têtes <span className="mono">X-Nexus-Timestamp</span> et
+      <span className="mono"> X-Nexus-Signature: sha256=HMAC(secret, horodatage + "." + corps)</span>.</p>
+    {data?.endpoint && <div className="flash ok">Adresse : <span className="mono">{data.endpoint.url}</span>{data.endpoint.last_error ? ` · dernière erreur : ${data.endpoint.last_error}` : ''}</div>}
+    <div className="row" style={{ marginTop: 8 }}><input className="input" style={{ flex: 1 }} placeholder="https://ma-boutique.sn/webhooks/nexus" value={url} onChange={(e) => setUrl(e.target.value)} />
+      <Btn kind="primary" disabled={busy || !url} onClick={() => run(async () => { const r = await rpc('lg_webhook_save', { p_url: url }); setSecret(r.secret); setUrl(''); reload(); return r; })}>Enregistrer</Btn>
+      {data?.endpoint && <Btn kind="ghost" onClick={() => run(async () => { const r = await rpc('lg_webhook_save', { p_delete: true }); reload(); return r; })}>Retirer</Btn>}</div>
+    {secret && <div className="flash todo" style={{ marginTop: 10 }}><div><b>Secret de signature, à copier maintenant</b> (il ne sera plus affiché) :
+      <div className="mono small" style={{ wordBreak: 'break-all', margin: '6px 0' }}>{secret}</div></div></div>}
+    {data?.events?.length > 0 && <div className="list small" style={{ marginTop: 10 }}>{data.events.slice(0, 10).map((e) => <div key={e.id} className="line">
+      <span className="mono grow">{e.event}</span><Badge kind={{ sent: 'ok', failed: 'bad' }[e.status] ?? 'todo'}>{e.status}</Badge></div>)}</div>}
+  </Card>;
 }

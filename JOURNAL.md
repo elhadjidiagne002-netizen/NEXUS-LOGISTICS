@@ -2,6 +2,17 @@
 
 Le plus récent en premier.
 
+## 08/10/2026 — Cycle C10 (Cloudflare) : intégration des boutiques en ligne
+- **Fait** : `migrations/0010_integration.sql` (adresse de rappel, événements à envoyer) ; `server/rpc/webhooks.js`
+  (événements signés HMAC-SHA256, envoi avec reprises) ; `GET /api/v1/orders/<référence>` ; événements créés à la
+  confirmation, préparation, départ, livraison, échec et annulation ; carte « Statuts renvoyés » dans Administration
+  → API boutiques ; notice `docs/integration-boutiques.md` (dont les étapes côté dépôt nexus-market).
+- **Choix** : l'événement n'est créé que par un `INSERT … SELECT … WHERE EXISTS` (commande avec référence externe ET
+  adresse active) : aucune lecture, aucune écriture pour les entreprises qui n'utilisent pas l'API.
+- **Pas fait** : la partie dans le dépôt nexus-market (pas accessible depuis cette session).
+- **État** : 77 tests serveur, builds OK.
+- **À appliquer en ligne** : migration `0010_integration.sql`.
+
 ## 08/10/2026 — Cycle C9 (Cloudflare) : offre payante, plateforme, site public
 - **Fait** : `migrations/0009_offre.sql` (paiements d'abonnement déclarés, erreurs de l'interface) ;
   `server/rpc/offre.js` (formules, quotas, abonnement, administration de la plateforme) ; `server/routes/public.js`

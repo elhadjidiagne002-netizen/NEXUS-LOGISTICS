@@ -114,6 +114,7 @@ const M = {
   invalid_channel: 'Identifiants WhatsApp invalides (numéro d\'instance et jeton Green API).',
   secrets_key_missing: 'Le chiffrement des identifiants n\'est pas configuré sur le serveur (SECRETS_KEY).',
   unknown_template: 'Modèle de message inconnu.',
+  invalid_url: 'Adresse invalide : https:// et un domaine public sont exigés.',
   quota_orders: 'Quota de commandes du mois atteint : passez à la formule Pro (Administration → Abonnement).',
   quota_couriers: 'Nombre maximal de chauffeurs atteint : passez à la formule Pro (Administration → Abonnement).',
   quota_hubs: 'Nombre maximal de lieux atteint : passez à la formule Pro (Administration → Abonnement).',

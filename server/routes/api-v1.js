@@ -6,7 +6,7 @@ import { HttpError, json, readJson } from '../http.js';
 import { sha256Hex } from '../crypto.js';
 import { now, rateLimit } from '../auth.js';
 import { companyConfig } from '../config.js';
-import { createOrders } from '../rpc/commandes.js';
+import { createOrders, amountDue, trackingUrl } from '../rpc/commandes.js';
 import { audit } from '../rpc/core.js';
 
 async function companyForKey(request, env) {
@@ -20,6 +20,31 @@ async function companyForKey(request, env) {
   if (!row) throw new HttpError(401, "Clé d'API absente ou invalide.", 'invalid_api_key');
   const { key_id, last_used_at, ...company } = row;
   return { keyId: key_id, lastUsed: last_used_at, company: { ...company, config: companyConfig(company) } };
+}
+
+/**
+ * GET /api/v1/orders/<référence> — état d'une commande envoyée par la boutique (sa référence externe) :
+ * statut, paiement, étapes, livreur, heure prévue, facture, lien de suivi. Lecture seule, même clé que l'envoi.
+ */
+export async function getOrder(request, env, { ref }) {
+  const k = await companyForKey(request, env);
+  await rateLimit(env, `api:${k.keyId}`, 300, 3600);
+  const o = await env.DB.prepare(
+    `SELECT o.*, (SELECT invoice_number FROM invoices i WHERE i.order_id = o.id AND i.credit_of IS NULL) AS invoice,
+            (SELECT json_object('status', s.status, 'eta', s.eta, 'failure_reason', s.failure_reason, 'courier', c.name) FROM trip_stops s JOIN trips t ON t.id = s.trip_id
+               LEFT JOIN couriers c ON c.id = t.courier_id WHERE s.order_id = o.id AND s.kind = 'delivery' AND s.status <> 'skipped' AND t.status <> 'cancelled'
+              ORDER BY t.created_at DESC LIMIT 1) AS stop
+       FROM orders o WHERE o.company_id = ? AND o.external_ref = ?`,
+  ).bind(k.company.id, decodeURIComponent(ref)).first();
+  if (!o) throw new HttpError(404, 'Commande inconnue.', 'unknown_order');
+  const stop = o.stop ? JSON.parse(o.stop) : null;
+  return json({
+    external_ref: o.external_ref, number: o.number, status: o.status, payment_method: o.payment_method, payment_status: o.payment_status,
+    amount_due_fcfa: amountDue(o), total_fcfa: o.total_fcfa, delivery_fee_fcfa: o.delivery_fee_fcfa, zone: o.delivery_zone, promised_at: o.promised_at,
+    steps: { created_at: o.created_at, confirmed_at: o.cod_confirmed_at ?? o.paid_at, in_transit_at: o.in_transit_at, delivered_at: o.delivered_at, cancelled_at: o.cancelled_at },
+    delivery: stop ? { status: stop.status, eta: stop.eta, courier: stop.courier ? String(stop.courier).split(' ')[0] : null, failure_reason: stop.failure_reason } : null,
+    invoice: o.invoice, cancel_reason: o.cancel_reason, tracking_url: trackingUrl({ request, company: k.company }, o.tracking_token),
+  });
 }
 
 /** POST /api/v1/orders */

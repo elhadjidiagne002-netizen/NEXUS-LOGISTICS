@@ -21,6 +21,7 @@ const ROUTES = [
   ['GET', /^\/api\/invites\/(?<token>[\w-]{16,80})$/, account.getInvite],
   ['POST', /^\/api\/invites\/(?<token>[\w-]{16,80})\/accept$/, account.acceptInvite],
   ['POST', /^\/api\/v1\/orders$/, apiV1.postOrders],
+  ['GET', /^\/api\/v1\/orders\/(?<ref>[^/?#]{1,120})$/, apiV1.getOrder],
   ['PUT', /^\/api\/files\/(?<path>[^?#]{8,320})$/, files.put],
   ['GET', /^\/api\/files\/(?<path>[^?#]{8,320})$/, files.get],
   ['POST', /^\/api\/cron\/(?<task>[a-z_]{3,30})$/, cron.run],

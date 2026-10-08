@@ -7,6 +7,7 @@
 import { fail, audit, idempotent, hasRole, text, int, uuid, parseJson, guard, runBatch, today, plusMinutes } from './core.js';
 import { loadStock, pickLocation, lotHint, consumeStatements, locKey } from './stock.js';
 import { notifyOrder, notifyPerson, sendLater, hhmm } from './messages.js';
+import { webhookStatement } from './webhooks.js';
 
 const ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
 const HANDLING = ['fragile', 'lourd', 'liquide', 'alimentaire', 'froid', 'vivant', 'chimique'];
@@ -328,7 +329,7 @@ export default {
           .bind(ctx.now, ctx.now, o.id, ctx.company.id));
         await runBatch(ctx, stmts, 'task_not_picking');
         // message « commande préparée » au client : cycle C8
-        await sendLater(ctx, [await notifyOrder(ctx, 'lg_prepared', o, { colis: out.length })]);
+        await sendLater(ctx, [await notifyOrder(ctx, 'lg_prepared', o, { colis: out.length }), webhookStatement(ctx, o.id, 'order.prepared', { packages: out.length })]);
         return { ok: true, packages: out, zone: o.delivery_zone };
       });
     },

@@ -10,6 +10,7 @@ import { chunks } from '../http.js';
 import { loadPricing, computeQuote, insuranceFee, zoneAt, SERVICES } from './tarifs.js';
 import { releaseStatements } from './preparation.js';
 import { checkQuota } from './offre.js';
+import { webhookStatement } from './webhooks.js';
 import { notifyOrder, notifyPerson, sendLater, hhmm } from './messages.js';
 
 export const IMPORT_MAX = 50;          // commandes par appel (import CSV, API) : budget de requêtes D1
@@ -228,7 +229,7 @@ export async function confirmCod(ctx, companyId, orderId, via) {
   if (!o.cod_confirmed_at) {
     const row = await ctx.db.prepare('SELECT * FROM orders WHERE id = ? AND company_id = ?').bind(orderId, companyId).first();
     const tc = c.company.name ? c : { ...c, company: { ...c.company, ...(await ctx.db.prepare('SELECT id, name FROM companies WHERE id = ?').bind(companyId).first()), config: c.company.config ?? {} } };
-    await sendLater(tc, [await notifyOrder(tc, 'lg_order_confirmed', row)]);
+    await sendLater(tc, [await notifyOrder(tc, 'lg_order_confirmed', row), webhookStatement(tc, orderId, 'order.confirmed', { via })]);
   }
   return { ok: true, confirmed: true };
 }
@@ -248,7 +249,11 @@ export async function cancelOrder(ctx, companyId, orderId, reason) {
           AND (SELECT status FROM orders WHERE id = ?) = 'cancelled'`,
     ).bind(ctx.now, orderId, companyId, orderId),
   ]);
-  if (r.meta.changes) return { ok: true };
+  if (r.meta.changes) {
+    const c = ctx.company?.id === companyId ? ctx : { ...ctx, company: { ...(ctx.company ?? {}), id: companyId } };
+    await sendLater(c, [webhookStatement(c, orderId, 'order.cancelled', { reason: text(reason, 200) })]);
+    return { ok: true };
+  }
   const o = await ctx.db.prepare('SELECT status FROM orders WHERE id = ? AND company_id = ?').bind(orderId, companyId).first();
   if (!o) return { ok: false, error: 'unknown_order' };
   if (o.status === 'cancelled') return { ok: true, already: true };

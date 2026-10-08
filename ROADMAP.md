@@ -155,12 +155,14 @@ l'aperçu (`logistics-full`), migrations D1 appliquées en ligne, déploiement d
 - Reste : migration `0009` à appliquer en ligne ; variable `ADMIN_EMAILS` à poser sur Pages ; numéros Wave / Orange
       Money à saisir dans Plateforme → Formules ; Sentry non branché (suivi maison suffisant pour l'instant).
 
-## C10 — Intégration NEXUS Market
-- [ ] Lecture de l'état d'une commande par l'API (`GET /api/v1/orders/<référence>`), pour les boutiques.
-- [ ] NEXUS Market devient une entreprise cliente : ses commandes payées arrivent par l'API par clé (C2),
-      les statuts de livraison repartent vers NEXUS par un appel signé (HMAC).
-- [ ] Côté dépôt `nexus-market` : brancher l'envoi des commandes, et retirer ou adapter `lg-fallback.js`
-      (conçu pour l'ancienne cible : messages `lg_*` dans `notification_outbox`).
+## C10 — Intégration NEXUS Market ✅ côté NEXUS Logistics (08/10/2026)
+- [x] Lecture de l'état d'une commande par l'API (`GET /api/v1/orders/<référence>`), même clé que l'envoi.
+- [x] Statuts renvoyés à la boutique par un appel signé HMAC-SHA256 (`order.confirmed` … `order.cancelled`),
+      adresse et secret par entreprise (`lg_webhook_get/save`, secret chiffré), envoi et reprises par la tâche
+      « messages » ; notice `docs/integration-boutiques.md`. 3 tests serveur.
+- [ ] Côté dépôt `nexus-market` (hors de ce dépôt) : envoyer les commandes, recevoir les statuts, retirer
+      `lg-fallback.js` — étapes détaillées au § 5 de `docs/integration-boutiques.md`.
+- Reste : migration `0010` à appliquer en ligne ; créer l'entreprise « NEXUS Market », sa clé et son adresse de rappel.
 
 ## C11 — Fonctions avancées restantes et nettoyage
 - [ ] Ce qui reste des cycles 6 à 22 de la version Postgres (incidents et assurance, engagement de délai des
