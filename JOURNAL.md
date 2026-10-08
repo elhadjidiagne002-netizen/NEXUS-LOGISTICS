@@ -2,6 +2,19 @@
 
 Le plus récent en premier.
 
+## 08/10/2026 — Reprise en local du travail de nuit + mise au niveau de la suite NEXUS
+- **Rapatrié** : la branche cloud `claude/gallant-johnson-4atibs` (cycles 6 à 22) fusionnée dans `main`
+  (avance simple, PR #1) ; côté NEXUS Market, la PR #4 (canal de secours e-mail `lg-fallback.js`) aussi.
+- **Vérifié en local** : 103/103 tests ici, build Vite OK ; côté NEXUS 373/373 tests unitaires ; aucune
+  contrainte en base sur `notification_outbox.whatsapp_status` (le statut `fallback_email` passe).
+- **Mise au niveau** des autres sites (Devizo, My shop, CV) : liens « La suite NEXUS (gratuit) » sur
+  l'écran de connexion et l'accueil, suivis par `?src=logistics-connexion` / `?src=logistics-accueil`.
+- **Déploiement** : le workflow `deploy.yml` échoue faute du secret `CLOUDFLARE_API_TOKEN` dans ce dépôt ;
+  démo republiée à la main (`wrangler pages deploy dist`).
+- **Reste à décider par l'utilisateur** : sous-domaine `logistique.nexusmarket.sn` (comme devis./myshop./cv.),
+  secret GitHub du déploiement, remontée d'erreurs Sentry (projet à créer), et toujours la branche de test
+  Supabase + décisions 1-3 du chapitre 14 avant toute application en prod.
+
 ## 08/10/2026 — Cycle 22 : appel de livreurs en renfort (module 04, P2 « Gestion des pics »)
 - La prévision signalait la sous-capacité (« Appelez des livreurs en renfort ») sans moyen d'agir.
 - `lg_reinforcement_call(jour, besoin, zones, note)` : un appel par jour ; chaque chauffeur actif reçoit

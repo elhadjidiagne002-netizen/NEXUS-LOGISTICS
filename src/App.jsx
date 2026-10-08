@@ -162,6 +162,7 @@ function Login({ error }) {
         <Field label="Mot de passe"><input className="input" type="password" autoComplete="current-password" value={pw} onChange={(e) => setPw(e.target.value)} required /></Field>
         {err && <div className="flash bad">{errText(err)}</div>}
         <Btn kind="primary" type="submit" size="xl">Se connecter</Btn></form>}
+      <SuiteNexus where="connexion" />
     </main>
   </div>;
 }
@@ -219,7 +220,22 @@ function Home({ me, tiles }) {
           <span className="chip-ico" style={{ '--c': t.c }}><Icon name={t.icon} size={22} /></span>
           <b>{t.title}</b><span className="muted small">{t.sub}</span>
           <span className="go">Ouvrir <Icon name="arrowRight" size={16} /></span></Link>)}</div>}
+    <SuiteNexus where="accueil" />
   </>;
+}
+
+// Pont vers les autres outils gratuits de la suite (même convention ?src=<site>-<endroit> que
+// Devizo, My shop et CV en ligne, pour mesurer d'où viennent les visites).
+const SUITE = [
+  ['https://nexusmarket.sn/', 'NEXUS Market', 'vendre et être trouvé'],
+  ['https://myshop.nexusmarket.sn/', 'My shop', 'caisse et stock'],
+  ['https://devis.nexusmarket.sn/', 'Devizo', 'devis et factures'],
+  ['https://cv.nexusmarket.sn/', 'CV en ligne', 'recruter, se présenter'],
+];
+export function SuiteNexus({ where }) {
+  return <p className="small muted suite-nexus" style={{ marginTop: 28 }}>La suite NEXUS (gratuit) :{' '}
+    {SUITE.map(([url, name, what], i) => <React.Fragment key={url}>{i > 0 && ' · '}
+      <a href={`${url}?src=logistics-${where}`} target="_blank" rel="noopener">{name}</a> ({what})</React.Fragment>)}</p>;
 }
 
 function TopBar({ me }) {
