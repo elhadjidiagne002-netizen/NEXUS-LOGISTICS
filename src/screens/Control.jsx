@@ -28,7 +28,7 @@ export default function Control() {
   ];
   const lines = trips.map((t) => ({ points: t.stops.filter((s) => s.lat != null).map((s) => [s.lat, s.lng]), color: t.late_min > 15 ? '#c62828' : '#0b6e4f', dashed: t.status !== 'in_progress' }));
   return <>
-    <PageHead title="Tour de contrôle" back="/"><span className="small muted">mis à jour toutes les 15 s</span></PageHead>
+    <PageHead title="Tour de contrôle" back="/"><Rain /><span className="small muted">mis à jour toutes les 15 s</span></PageHead>
     <div className="stats">
       <Stat icon="box" c="#0284c7" label="colis du jour" value={k.packages_today} />
       <Stat icon="check" c="#059669" label="livrés" value={k.delivered} kind="ok" />
@@ -130,4 +130,23 @@ function AutoPlan({ plan, onClose, onDone }) {
       const r = await rpc('lg_autoplan_run', { p_apply: true }); onDone(); go('/quai'); return r;
     }, { ok: 'Voyages créés : à charger au quai' })}>Créer {plan.trips.length} voyage{plan.trips.length > 1 ? 's' : ''}</Btn>}
   </div></Modal>;
+}
+
+// Forte pluie : le répartiteur déclare le supplément pour quelques heures (devis au panier)
+function Rain() {
+  const { data, reload } = useRpc('lg_surcharges_list', {}, { refresh: 60000 });
+  const [open, setOpen] = useState(false);
+  const [run, busy] = useAction();
+  const rain = (data ?? []).find((s) => s.code === 'rain');
+  if (!rain) return null;
+  const declare = (h) => run(async () => { const r = await rpc('lg_surcharge_declare', { p_code: 'rain', p_hours: h, p_zones: null }); setOpen(false); reload(); return r; },
+    { ok: h ? `Supplément pluie actif ${h} h` : 'Supplément pluie levé' });
+  return <>
+    <Btn size="sm" kind={rain.in_force ? 'todo' : 'ghost'} onClick={() => setOpen(true)}>{rain.in_force ? `Pluie · jusqu'à ${hhmm(rain.until)}` : 'Forte pluie'}</Btn>
+    {open && <Modal title="Supplément forte pluie" onClose={() => setOpen(false)}><div className="stack">
+      <p style={{ margin: 0 }}>Ajoute <b>{formatF(rain.amount_fcfa)}</b> au prix de livraison des nouvelles commandes{rain.zones?.length ? ` (${rain.zones.join(', ')})` : ', toutes zones'}. Les livraisons offertes restent offertes.</p>
+      <div className="row">{[2, 4, 8].map((h) => <Btn key={h} kind="primary" disabled={busy} onClick={() => declare(h)}>{h} h</Btn>)}
+        {rain.in_force && <Btn kind="bad" disabled={busy} onClick={() => declare(0)}>Lever maintenant</Btn>}</div>
+      <p className="small muted">Le montant et les zones se règlent dans Administration → Tarifs et zones.</p></div></Modal>}
+  </>;
 }

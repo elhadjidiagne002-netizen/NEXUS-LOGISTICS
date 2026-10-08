@@ -2,6 +2,20 @@
 
 Le plus récent en premier.
 
+## 08/10/2026 — Cycle 10 : offres — suppléments nuit et forte pluie (module 12, P2)
+- Express, programmé et « offerte au-delà de » existaient déjà dans `lg_quote`. Ajout de
+  **suppléments** (`lg_surcharges`) **désactivés par défaut** : aucun prix ne change tant qu'on n'en
+  active pas un. Une livraison offerte reste offerte (pas de supplément).
+- **Nuit** : fenêtre horaire de Dakar (à cheval sur minuit géré), express seulement par défaut,
+  1 000 F proposé ; réglable par l'admin (Administration → Tarifs et zones → Suppléments).
+- **Forte pluie** : le répartiteur la **déclare** depuis la tour de contrôle pour 2, 4 ou 8 h
+  (24 h max), toutes zones ou zones choisies ; elle expire d'elle-même (`lg_surcharge_declare`).
+- `lg_quote` renvoie désormais `base_fcfa` et `surcharges` en plus de `price_fcfa` (compatible :
+  mêmes champs qu'avant). Le simulateur de l'admin affiche le détail.
+- Reste du P2 « Offres » : l'abonnement (livraison illimitée) — demande une identité client fiable
+  au panier, non traité.
+- Tests : 71/71.
+
 ## 08/10/2026 — Cycle 9 : engagement de délai des vendeurs (module 09, P2)
 - **Engagement explicite** (`lg_vendor_commitments`) : le vendeur promet un délai de préparation
   (1 à 96 h) dans son espace, ou le chef de quai le fixe pour lui (`lg_vendor_commitment_set`).

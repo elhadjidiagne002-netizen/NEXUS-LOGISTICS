@@ -143,13 +143,42 @@ function Pricing() {
         <input className="input" inputMode="decimal" value={quote.kg} onChange={(e) => setQuote({ ...quote, kg: e.target.value })} aria-label="Poids kg" />
         <input className="input" inputMode="numeric" value={quote.sub} onChange={(e) => setQuote({ ...quote, sub: e.target.value })} aria-label="Montant panier" /></div>
         <Btn style={{ marginTop: 8 }} onClick={async () => setQr(await rpc('lg_quote', { p_zone: quote.zone, p_weight_g: Math.round(Number(quote.kg) * 1000), p_subtotal_fcfa: Number(quote.sub) }))}>Calculer</Btn>
-        {qr && (qr.ok ? <div className="flash ok" style={{ marginTop: 8 }}><div><b className="big">{formatF(qr.price_fcfa)}</b> {qr.free && '(offerte)'} · {qr.vehicle_kind}<div className="small">promis le {dmy(qr.promised_at)}</div></div></div>
+        {qr && (qr.ok ? <div className="flash ok" style={{ marginTop: 8 }}><div><b className="big">{formatF(qr.price_fcfa)}</b> {qr.free && '(offerte)'} · {qr.vehicle_kind}{qr.surcharges?.length ? ` · dont ${qr.surcharges.map((s) => `${s.label.toLowerCase()} ${formatF(s.amount_fcfa)}`).join(', ')}` : ''}<div className="small">promis le {dmy(qr.promised_at)}</div></div></div>
           : <div className="flash bad" style={{ marginTop: 8 }}>{qr.error}</div>)}
         <p className="small muted">Fonction publique <span className="mono">lg_quote</span> : le site peut l'appeler au panier, avant paiement.</p></Card>
     </div>
+    <Surcharges zones={data.zones} />
     <Card><h3>Zones ({data.zones.length})</h3><div className="scroll-x"><table className="tbl"><thead><tr><th>Zone</th><th>Ville</th><th>Desservie</th><th>Heure limite</th><th>Offerte dès</th><th></th></tr></thead>
       <tbody>{data.zones.map((z) => <ZoneRow key={z.name} z={z} reload={reload} />)}</tbody></table></div></Card>
   </div>;
+}
+
+// Suppléments (nuit, forte pluie…) : désactivés par défaut ; la pluie se déclare depuis la tour de contrôle
+function Surcharges({ zones }) {
+  const { data, reload } = useRpc('lg_surcharges_list', {});
+  const [f, setF] = useState(null);
+  const [run, busy] = useAction();
+  return <Card><h3>Suppléments</h3><div className="list">{(data ?? []).map((s) => <div key={s.code} className="line">
+    <span className="grow">{s.label} <Badge kind={s.in_force ? 'ok' : ''}>{s.in_force ? 'actif' : 'inactif'}</Badge>
+      <div className="small muted">{formatF(s.amount_fcfa)}{s.start_time ? ` · de ${s.start_time.slice(0, 5)} à ${s.end_time?.slice(0, 5)}` : ''}
+        {s.services?.length ? ` · ${s.services.join(', ')}` : ' · tous services'}{s.zones?.length ? ` · ${s.zones.join(', ')}` : ' · toutes zones'}
+        {s.until ? ` · jusqu'à ${dmy(s.until)} ${new Date(s.until).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Dakar' })}` : ''}</div></span>
+    <Btn size="sm" onClick={() => setF({ ...s, start_time: s.start_time?.slice(0, 5) ?? '', end_time: s.end_time?.slice(0, 5) ?? '', zones: s.zones ?? [], services: s.services ?? [] })}>Modifier</Btn></div>)}</div>
+    <p className="small muted">Ajoutés au devis au panier (<span className="mono">lg_quote</span>), jamais sur une livraison offerte.</p>
+    {f && <Modal title={f.label} onClose={() => setF(null)}><div className="stack">
+      <Field label="Montant (F CFA)"><input className="input" inputMode="numeric" value={f.amount_fcfa} onChange={(e) => setF({ ...f, amount_fcfa: e.target.value.replace(/\D/g, '') })} /></Field>
+      <div className="grid cols-2"><Field label="De (heure)"><input className="input" type="time" value={f.start_time} onChange={(e) => setF({ ...f, start_time: e.target.value })} /></Field>
+        <Field label="À (heure)"><input className="input" type="time" value={f.end_time} onChange={(e) => setF({ ...f, end_time: e.target.value })} /></Field></div>
+      <Field label="Services (aucun = tous)"><Chips multi options={[['standard', 'Standard'], ['express', 'Express'], ['programme', 'Programmé']]} value={f.services} onChange={(services) => setF({ ...f, services })} /></Field>
+      <Field label="Zones (aucune = toutes)"><select className="input" multiple size={5} value={f.zones} onChange={(e) => setF({ ...f, zones: [...e.target.selectedOptions].map((o) => o.value) })}>
+        {zones.map((z) => <option key={z.name}>{z.name}</option>)}</select></Field>
+      <Field label="État"><Chips options={[['on', 'Actif'], ['off', 'Inactif']]} value={f.active ? 'on' : 'off'} onChange={(v) => setF({ ...f, active: v === 'on' })} /></Field>
+      <Btn kind="primary" disabled={busy} onClick={() => run(async () => {
+        const r = await rpc('lg_surcharge_save', { p: { code: f.code, label: f.label, amount_fcfa: Number(f.amount_fcfa) || 0, active: f.active,
+          start_time: f.start_time || null, end_time: f.end_time || null, services: f.services.length ? f.services : null, zones: f.zones.length ? f.zones : null } });
+        setF(null); reload(); return r;
+      }, { ok: 'Supplément enregistré' })}>Enregistrer</Btn></div></Modal>}
+  </Card>;
 }
 
 function ZoneRow({ z, reload }) {
