@@ -110,6 +110,8 @@ const M = {
   empty_file: 'Fichier vide.',
   file_too_large: 'Fichier trop lourd (1,5 Mo au plus).',
   already_reconciled: 'Voyage déjà rapproché.',
+  cron_disabled: 'Tâches planifiées non configurées.',
+  unknown_task: 'Tâche inconnue.',
   description_required: 'Décrivez l\'incident.',
   resolution_required: 'Indiquez la décision prise.',
   empty_credit_note: 'Choisissez au moins une ligne ou un montant.',

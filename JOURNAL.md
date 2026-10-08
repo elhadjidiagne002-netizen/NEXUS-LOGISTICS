@@ -2,6 +2,17 @@
 
 Le plus récent en premier.
 
+## 08/10/2026 — Cycle C7 (Cloudflare) : pilotage et tâches planifiées
+- **Fait** : `migrations/0007_pilotage.sql` (renforts, dernier passage des tâches) ; `server/rpc/pilotage.js`
+  (tour de contrôle, acquittement des alertes, indicateurs, axes, coûts et marges, prévision, anomalies, classement,
+  retours par cause, renforts) ; `server/routes/cron.js` (surveillance, nettoyage) ; Worker `cron/` (déclencheur).
+- **Choix (budget)** : indicateurs calculés à la lecture (aucune écriture) ; la surveillance traite toutes les
+  entreprises en 6 requêtes `INSERT OR IGNORE … SELECT` (une alerte par situation grâce à l'index `alerts_dedupe`) ;
+  un seul déclencheur cron (offre gratuite : 5 par compte), le nettoyage tourne au premier passage de chaque heure.
+- **État** : 63 tests serveur, 12 unitaires, builds OK ; tour de contrôle et pilotage vérifiés dans Chromium.
+- **À faire en ligne** : migration `0007_pilotage.sql` ; `cd cron && npx wrangler deploy && npx wrangler secret put
+  CRON_SECRET`, puis `npx wrangler pages secret put CRON_SECRET --project-name nexus-logistics` (même valeur).
+
 ## 08/10/2026 — Cycle C6 (Cloudflare) : caisse, factures, avoirs, relevés, incidents
 - **Fait** : `migrations/0006_caisse.sql` (versements, versements intermédiaires, gains des chauffeurs, factures et
   lignes) ; modules `server/rpc/caisse.js` (caisse, rapprochement, gains, incidents) et `factures.js` (facture à la

@@ -4,6 +4,7 @@ import * as account from './routes/account.js';
 import { handleRpc } from './rpc/index.js';
 import * as apiV1 from './routes/api-v1.js';
 import * as files from './routes/files.js';
+import * as cron from './routes/cron.js';
 
 const ROUTES = [
   ['GET', /^\/api\/health$/, () => json({ ok: true, service: 'nexus-logistics' })],
@@ -18,6 +19,7 @@ const ROUTES = [
   ['POST', /^\/api\/v1\/orders$/, apiV1.postOrders],
   ['PUT', /^\/api\/files\/(?<path>[^?#]{8,320})$/, files.put],
   ['GET', /^\/api\/files\/(?<path>[^?#]{8,320})$/, files.get],
+  ['POST', /^\/api\/cron\/(?<task>[a-z_]{3,30})$/, cron.run],
   ['POST', /^\/api\/rpc\/(?<name>lg_[a-z0-9_]{1,60})$/, (req, env, p) => handleRpc(req, env, p.name)],
 ];
 

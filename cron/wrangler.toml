@@ -1,0 +1,16 @@
+# Petit Worker qui déclenche les tâches planifiées de NEXUS Logistics (Pages n'a pas de cron).
+# Un seul déclencheur (toutes les 5 min) : l'offre gratuite en donne 5 par compte, déjà en partie utilisés.
+# Déploiement (une fois, depuis ce dossier) :
+#   npx wrangler deploy
+#   npx wrangler secret put CRON_SECRET                                    (même valeur que ci-dessous)
+#   npx wrangler pages secret put CRON_SECRET --project-name nexus-logistics   (à la racine du dépôt)
+name = "nexus-logistics-cron"
+main = "index.js"
+compatibility_date = "2026-09-01"
+workers_dev = false
+
+[triggers]
+crons = ["*/5 * * * *"]
+
+[vars]
+API_URL = "https://logistique.nexusmarket.sn"
