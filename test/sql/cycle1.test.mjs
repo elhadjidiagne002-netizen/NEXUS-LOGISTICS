@@ -125,7 +125,7 @@ test('cycle 2 · messages : texte final dans la file, modèle modifiable, désac
   const appr = await t.one("select vars from notification_outbox where event_key = 'lg_approaching' order by created_at desc limit 1");
   assert.match(appr.vars.texte, /Montant à préparer : (\d{1,3}( \d{3})*|0) F/, 'montant avec séparateur de milliers');
   const list = await t.rpc(U.support, 'lg_templates_list', {});
-  assert.equal(list.length, 12); // annexe B + gérant + code pour un tiers (cycle 5)
+  assert.equal(list.length, 14); // annexe B + gérant + code pour un tiers (cycle 5) + 2 relances vendeur (cycle 9)
   await assert.rejects(t.rpc(U.driver, 'lg_templates_list', {}), /forbidden/);
   await t.rpc(U.support, 'lg_template_save', { p_event: 'lg_prepared', p_body_fr: 'Coucou {prenom}, {colis} colis prêts !', p_active: true });
   assert.equal(await t.rpc(U.support, 'lg_preview_message', { p_event: 'lg_prepared', p_body: null, p_vars: { prenom: 'Awa', colis: 2 } }), 'Coucou Awa, 2 colis prêts !');
