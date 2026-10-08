@@ -68,6 +68,7 @@ function Day({ d, reload }) {
       <Stat icon="shield" c={d.cash_in_hand_fcfa > limit ? '#dc2626' : '#475569'} kind={d.cash_in_hand_fcfa > limit ? 'bad' : ''} value={formatF(d.cash_in_hand_fcfa)} label={`Espèces sur moi · plafond ${formatF(limit)}`} />
       <Stat icon="star" c="#059669" kind="ok" value={formatF(d.earnings_pending_fcfa)} label="Gains en attente" />
     </div>
+    <Reinforcements />
     {d.week && <div className="flash info" style={{ marginTop: 10 }}><Icon name="star" /><div style={{ flex: 1 }}>
       <b>{d.week.rank === 1 ? '1er' : `${d.week.rank}e`} sur {d.week.of}</b> cette semaine · {d.week.delivered} livrée(s){d.week.on_time_pct != null ? ` · ${d.week.on_time_pct} % à l'heure` : ''}
       <div className="small">Score {d.week.score} · gains de la semaine {formatF(d.week.earnings)}</div></div></div>}
@@ -377,4 +378,18 @@ function DockInfo({ trip }) {
   if (d.queued_at) return <div className="flash todo" style={{ margin: '8px 0' }}><Icon name="clock" /><div>En attente d'un quai{d.position ? ` · ${d.position === 1 ? 'prochain' : `${d.position}e dans la file`}` : ''}</div></div>;
   return <Btn kind="primary" block disabled={busy} onClick={() => run(async () => { const r = await act('lg_dock_checkin', { p_trip: trip }, 'Arrivée au hub'); reload(); return r; },
     { ok: 'Arrivée signalée' })}><Icon name="pin" size={18} />Je suis arrivé au hub</Btn>;
+}
+
+// Appel de renfort (jours de pic) : le chauffeur répond depuis sa journée
+function Reinforcements() {
+  const { data, reload } = useRpc('lg_my_reinforcements', {});
+  const [run, busy] = useAction();
+  if (!data?.length) return null;
+  return <div className="stack" style={{ marginTop: 10 }}>{data.map((c) => <Card key={c.id} kind={c.available == null ? 'todo' : ''}>
+    <b>Renfort demandé le {new Date(c.day + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</b>
+    <div className="small muted">{c.zones?.length ? c.zones.join(', ') : 'toutes zones'}{c.note ? ` · ${c.note}` : ''}</div>
+    <div className="row" style={{ marginTop: 8 }}>
+      <Btn kind={c.available === true ? 'ok' : ''} disabled={busy} onClick={() => run(async () => { const r = await act('lg_reinforcement_answer', { p_call: c.id, p_available: true }, 'Renfort : disponible'); reload(); return r; }, { ok: 'Merci, le répartiteur est prévenu' })}>Je suis disponible</Btn>
+      <Btn kind={c.available === false ? 'bad' : 'ghost'} disabled={busy} onClick={() => run(async () => { const r = await act('lg_reinforcement_answer', { p_call: c.id, p_available: false }, 'Renfort : pas disponible'); reload(); return r; }, { ok: 'Réponse enregistrée' })}>Pas disponible</Btn></div>
+  </Card>)}</div>;
 }

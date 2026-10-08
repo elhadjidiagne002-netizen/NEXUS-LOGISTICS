@@ -123,6 +123,9 @@ const M = {
   in_pickup_trip: 'Ce colis est déjà prévu dans une collecte : retirez-le du voyage d\'abord.',
   unknown_booking: 'Réservation inconnue.',
   vendor_required: 'Choisissez un vendeur.',
+  past_day: 'Ce jour est déjà passé.',
+  call_closed: 'Cet appel de renfort est clos.',
+  unknown_call: 'Appel de renfort inconnu.',
 };
 
 export function errText(e) {

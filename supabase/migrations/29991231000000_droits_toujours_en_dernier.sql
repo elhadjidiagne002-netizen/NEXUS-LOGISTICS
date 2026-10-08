@@ -66,6 +66,7 @@ declare
     'lg_vendor_statement', 'lg_vendor_statements',
     'lg_dropoff_slots_create', 'lg_dropoff_available', 'lg_dropoff_book', 'lg_dropoff_cancel', 'lg_dropoff_receive', 'lg_dropoffs_today',
     'lg_outbox_channels', 'lg_returns_expected',
+    'lg_reinforcement_call', 'lg_my_reinforcements', 'lg_reinforcement_answer', 'lg_reinforcements', 'lg_reinforcement_close',
     -- chauffeur
     'lg_trip_start', 'lg_my_day', 'lg_stop_call', 'lg_stop_arrive', 'lg_deliver', 'lg_fail', 'lg_trip_finish',
     'lg_driver_ping', 'lg_sos', 'lg_add_expense', 'lg_vehicle_check',

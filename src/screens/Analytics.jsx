@@ -92,12 +92,20 @@ const wd = (date, opts = { weekday: 'long' }) => new Date(`${date}T12:00:00`).to
 
 function Forecast() {
   const { data, error, loading } = useRpc('lg_forecast', { p_days: 7 });
+  const calls = useRpc('lg_reinforcements', { p_days: 7 }, { refresh: 30000 });
+  const [callFor, setCallFor] = useState(null);
   if (loading && !data) return <Loading />;
   if (error) return <ErrorBox error={error} />;
   const max = Math.max(...data.days.map((d) => Number(d.orders)), 1);
   const short = data.days.filter((d) => d.under_capacity);
   return <div className="stack">
-    {short.length > 0 && <div className="flash bad"><Icon name="alert" /><div>Sous-capacité prévue : {short.map((d) => `${wd(d.date)} ${dmy(d.date)} (${d.vehicles_needed} véhicules pour ${data.fleet})`).join(' · ')}. Appelez des livreurs en renfort.</div></div>}
+    {short.length > 0 && <div className="flash bad"><Icon name="alert" /><div>Sous-capacité prévue : {short.map((d) => `${wd(d.date)} ${dmy(d.date)} (${d.vehicles_needed} véhicules pour ${data.fleet})`).join(' · ')}. Appelez des livreurs en renfort.</div>
+      <Btn kind="primary" onClick={() => setCallFor({ day: short[0].date, needed: String(Math.max(short[0].vehicles_needed - data.fleet, 1)), zones: short[0].zones.map((z) => z.zone).slice(0, 3).join(', '), note: short[0].peak ?? '' })}>Appeler des renforts</Btn></div>}
+    {(calls.data ?? []).length > 0 && <Card><h3>Appels de renfort</h3><div className="list">{calls.data.map((c) => <div key={c.id} className="line">
+      <span className="grow"><b style={{ textTransform: 'capitalize' }}>{wd(c.day)} {dmy(c.day)}</b> · besoin {c.needed}{c.status === 'closed' ? ' · clos' : ''}
+        <div className="small muted">{c.available.length ? `Disponibles : ${c.available.map((a) => a.name).join(', ')}` : 'Aucun disponible pour l\'instant'} · {c.no} non · {c.waiting} sans réponse</div></span>
+      <Badge kind={c.yes >= c.needed ? 'ok' : 'todo'}>{c.yes}/{c.needed}</Badge>
+      {c.status === 'open' && <Btn size="sm" kind="ghost" onClick={async () => { await rpc('lg_reinforcement_close', { p_call: c.id }); calls.reload(); }}>Clore</Btn>}</div>)}</div></Card>}
     <Card><div className="card-title"><h2>7 prochains jours</h2><span className="small muted">{data.per_trip} colis par voyage en moyenne · flotte : {data.fleet}</span></div>
       <div style={{ display: 'grid', gridTemplateColumns: `repeat(${data.days.length}, 1fr)`, gap: 10, alignItems: 'end', height: 220 }}>
         {data.days.map((d) => <div key={d.date} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, height: '100%', justifyContent: 'flex-end' }}>
@@ -105,10 +113,13 @@ function Forecast() {
           <div title={`${d.orders} commandes`} style={{ width: '70%', borderRadius: '8px 8px 2px 2px', height: `${(100 * Number(d.orders)) / max}%`, minHeight: 4,
             background: d.peak ? 'linear-gradient(180deg,#fbbf24,#d97706)' : d.under_capacity ? 'linear-gradient(180deg,#f87171,#dc2626)' : 'linear-gradient(180deg,#34d399,#059669)' }} />
           <span className="small" style={{ textTransform: 'capitalize' }}>{wd(d.date, { weekday: 'short' }).replace('.', '')}</span>
-          <span className="small muted">{d.vehicles_needed} véh.</span>{d.peak && <Badge kind="todo">{d.peak}</Badge>}</div>)}</div></Card>
+          <span className="small muted">{d.vehicles_needed} véh.</span>{d.peak && <Badge kind="todo">{d.peak}</Badge>}
+          <button className="btn sm ghost" style={{ minHeight: 28, padding: '0 6px' }} title="Appeler des renforts pour ce jour"
+            onClick={() => setCallFor({ day: d.date, needed: String(Math.max(d.vehicles_needed - data.fleet, 1)), zones: d.zones.map((z) => z.zone).slice(0, 3).join(', '), note: d.peak ?? '' })}><Icon name="users" size={14} /></button></div>)}</div></Card>
     <div className="grid cols-3">{data.days.slice(0, 3).map((d) => <Card key={d.date}><h3 style={{ textTransform: 'capitalize' }}>{wd(d.date)} {dmy(d.date)}</h3>
       {d.zones.length === 0 ? <p className="small muted">Pas d'historique ce jour-là.</p> : <div className="list">{d.zones.map((z) =>
         <div key={z.zone} className="line small"><span className="grow">{z.zone}</span><b>{z.orders}</b></div>)}</div>}</Card>)}</div>
+    {callFor && <Modal title={`Renfort pour le ${dmy(callFor.day)}`} onClose={() => setCallFor(null)}><ReinforcementForm f={callFor} onDone={() => { setCallFor(null); calls.reload(); }} /></Modal>}
     <p className="small muted">Méthode : moyenne pondérée du même jour de la semaine sur les 4 dernières semaines (0,4 · 0,3 · 0,2 · 0,1), × coefficient des jours de pic déclarés dans les réglages (Tabaski, Korité, Magal, Louma…), marge de 15 % pour les véhicules.</p>
   </div>;
 }
@@ -248,4 +259,18 @@ function Costs() {
         <p className="small muted">Coût réparti au prorata des présentations : une zone lointaine coûte en réalité davantage par présentation. À affiner avec le kilométrage par arrêt.</p></Card>
     </>}
   </div>;
+}
+
+function ReinforcementForm({ f: init, onDone }) {
+  const [f, setF] = useState(init);
+  const [run, busy] = useAction();
+  return <div className="stack">
+    <Field label="Livreurs supplémentaires nécessaires"><input className="input" inputMode="numeric" value={f.needed} onChange={(e) => setF({ ...f, needed: e.target.value.replace(/\D/g, '') })} /></Field>
+    <Field label="Zones (séparées par des virgules, facultatif)"><input className="input" value={f.zones} onChange={(e) => setF({ ...f, zones: e.target.value })} /></Field>
+    <Field label="Note (Tabaski, Louma…)"><input className="input" value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} /></Field>
+    <p className="small muted">Chaque chauffeur actif reçoit un message WhatsApp (e-mail en secours) et répond dans son application. Relancer le même jour ne renvoie rien à ceux déjà prévenus.</p>
+    <Btn kind="primary" size="xl" disabled={busy || !Number(f.needed)} onClick={() => run(async () => {
+      const r = await rpc('lg_reinforcement_call', { p_day: f.day, p_needed: Number(f.needed), p_zones: f.zones.split(',').map((z) => z.trim()).filter(Boolean), p_note: f.note || null });
+      if (r.ok) onDone(); return r;
+    }, { ok: 'Appel envoyé aux chauffeurs' })}>Envoyer l'appel</Btn></div>;
 }

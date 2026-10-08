@@ -29,7 +29,7 @@ Mode réel : copier `.env.example` en `.env` et renseigner `VITE_SUPABASE_URL` e
 npm test
 ```
 
-101 tests : parcours complet en SQL, droits réels sous les rôles `anon` et
+103 tests : parcours complet en SQL, droits réels sous les rôles `anon` et
 `authenticated`, scénario de démo, un fichier par cycle d'amélioration, algorithmes.
 
 ## Ce qui est construit
@@ -60,7 +60,7 @@ npm test
 | 4 | Entrepôt : emplacements, rangement, « où est ce produit ? », chemin de prélèvement, préparation par vague avec bacs, inventaire tournant à l'aveugle |
 | 5 | Prévision de volume et de véhicules (jours de pic) · détection d'anomalies · classement et prime de ponctualité des chauffeurs · contrôle des retours (remise en vente / vendeur / rebut) · livraison à un tiers |
 
-### Fonctions P2 ajoutées le 08/10/2026 (cycles 6 à 21)
+### Fonctions P2 ajoutées le 08/10/2026 (cycles 6 à 22)
 | Cycle | Contenu | Où |
 |---|---|---|
 | 6 | **Lots et péremption** : rangement par lot et date, prélèvement « premier périmé, premier sorti », sortie de stock motivée, **traçabilité pour rappel produit** (qui a reçu le lot X) ; lots du vendeur dans son espace | `/entrepot` → Péremption, `/vendeur` |
@@ -79,6 +79,7 @@ npm test
 | 19 | **Entretien préventif** : kilométrage estimé, échéance du carnet, alerte dans la tour de contrôle | `/admin` → Flotte, `/tour` |
 | 20 | **Retour de tournée** : écart signalé dès la clôture, colis attendus au quai, alerte levée au dernier scan | `/quai` → Retours, `/tour` |
 | 21 | **Arrivée détectée automatiquement** par le GPS (rayon réglable) | app chauffeur |
+| 22 | **Appel de livreurs en renfort** les jours de pic : message aux chauffeurs, réponses dans l'app | `/analytique` → Prévision, app chauffeur |
 
 Les montants proposés (frais par cause de retour, plafond sans assurance, prime, suppléments)
 sont des valeurs de départ **à valider** ; tous sont réglables dans l'administration.

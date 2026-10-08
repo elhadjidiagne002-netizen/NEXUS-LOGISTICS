@@ -2,6 +2,16 @@
 
 Le plus récent en premier.
 
+## 08/10/2026 — Cycle 22 : appel de livreurs en renfort (module 04, P2 « Gestion des pics »)
+- La prévision signalait la sous-capacité (« Appelez des livreurs en renfort ») sans moyen d'agir.
+- `lg_reinforcement_call(jour, besoin, zones, note)` : un appel par jour ; chaque chauffeur actif reçoit
+  le message `lg_reinforcement` (WhatsApp, e-mail de secours) **une seule fois** ; relancer met à jour
+  le besoin sans renvoyer. Le chauffeur répond dans « Ma journée » (`lg_reinforcement_answer`) ; le
+  répartiteur voit disponibles / non / sans réponse (`lg_reinforcements`) et clôt l'appel.
+- Écrans : Pilotage → Prévision (bouton sur le bandeau de sous-capacité et sur chaque jour, suivi des
+  appels) ; app chauffeur (carte « Renfort demandé le … »). Vérifié de bout en bout dans la démo.
+- Tests : 103/103.
+
 ## 08/10/2026 — Cycle 21 : arrivée détectée automatiquement (module 04, P2)
 - `lg_driver_ping` (positions envoyées toutes les 10 s pendant la tournée) passe l'arrêt en cours à
   « arrivé » quand le chauffeur est à moins de `auto_arrive_m` (80 m, 0 = désactivé) avec un GPS précis
