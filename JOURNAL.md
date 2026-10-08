@@ -2,6 +2,21 @@
 
 Le plus récent en premier.
 
+## 08/10/2026 — Dépôt GitHub et mise en ligne (démo)
+- Dépôt `elhadjidiagne002-netizen/NEXUS-LOGISTICS` (créé par l'utilisateur, **public**) :
+  l'envoi par le navigateur n'avait pris que les fichiers de premier niveau ; les dossiers
+  `src/`, `supabase/`, `test/`, `public/` ont été ajoutés (commit `f03da6e`).
+- Projet Cloudflare Pages `nexus-logistics` → **https://nexus-logistics-6my.pages.dev**
+  (le nom court était pris). Piège : wrangler 4.148 crée désormais les projets sous forme
+  « Workers » et échoue sans point d'entrée ; création en Pages classique avec `--force`
+  (une seule fois, comme les autres sites), et `wrangler.toml` (`pages_build_output_dir = "dist"`).
+- `.github/workflows/deploy.yml` sur le modèle de My shop : tests → construction → déploiement
+  → contrôle de la production (titre, script du build, page de suivi, service worker).
+  Variables de dépôt `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` à poser pour le mode réel ;
+  sans elles, le site publié est la démonstration.
+- Premier déploiement fait depuis le poste et vérifié (cache immuable des assets, WebAssembly
+  de la démo servi en `application/wasm`).
+
 ## 07/10/2026 — Cycle 5 : anticiper, motiver, prévenir (dernier des 5 cycles demandés)
 - **Prévision** (`lg_forecast`) : moyenne pondérée du même jour sur 4 semaines, jours de pic
   réglables (`peak_days` : Tabaski, Louma…), besoin en véhicules et alerte de sous-capacité.
