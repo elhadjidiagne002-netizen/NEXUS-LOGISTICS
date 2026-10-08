@@ -18,6 +18,7 @@ const Analytics = lazy(() => import('./screens/Analytics.jsx'));
 const Messages = lazy(() => import('./screens/Messages.jsx'));
 const Warehouse = lazy(() => import('./screens/Warehouse.jsx'));
 const Track = lazy(() => import('./screens/Track.jsx'));
+const Platform = lazy(() => import('./screens/Platform.jsx'));
 
 export const MeCtx = React.createContext(null);
 export const useMe = () => React.useContext(MeCtx);
@@ -38,6 +39,7 @@ const TILES = [
   { to: '/vendeur', icon: 'store', c: '#ea580c', title: 'Espace vendeur', short: 'Vendeur', sub: 'Colis, fiches produit, délais', group: 'Vendeurs', show: (m) => m.is_vendor || m.is_admin },
   { to: '/analytique', icon: 'chart', c: '#2563eb', title: 'Pilotage', short: 'Pilotage', sub: 'Indicateurs, prévision, anomalies, classement', group: 'Pilotage', show: (m) => has(m, 'dispatcher', 'accountant', 'support') },
   { to: '/admin', icon: 'settings', c: '#475569', title: 'Administration', short: 'Admin', sub: 'Rôles, flotte, tarifs, réglages', group: 'Pilotage', show: (m) => m.is_admin || has(m, 'dock_chief') },
+  { to: '/plateforme', icon: 'shield', c: '#0f172a', title: 'Plateforme', short: 'Plateforme', sub: 'Entreprises, abonnements, erreurs', group: 'Pilotage', show: (m) => !!m.is_platform_admin },
 ];
 
 export default function App() {
@@ -136,7 +138,7 @@ function Login({ error }) {
   };
   return <div className="login-wrap">
     <aside className="login-art">
-      <div className="brand" style={{ color: '#fff' }}><Logo size={40} /><span>NEXUS Logistics<small style={{ color: '#a7f3d0' }}>NEXUS Market · Dakar</small></span></div>
+      <div className="brand" style={{ color: '#fff' }}><Logo size={40} /><span>NEXUS Logistics<small style={{ color: '#a7f3d0' }}>{MODE === 'api' ? 'Pour toute entreprise qui livre' : 'NEXUS Market · Dakar'}</small></span></div>
       <div className="stack" style={{ gap: 22 }}>
         <h1>De la commande payée à la livraison encaissée.</h1>
         <p style={{ maxWidth: 480, color: '#a7f3d0', margin: 0 }}>Préparation scannée, chargement contrôlé, livraison prouvée, caisse rapprochée et facture automatique — sur le terrain, même sans réseau.</p>
@@ -145,6 +147,7 @@ function Login({ error }) {
           <div><b>Livré</b>code client, photo, position</div><div><b>Encaissé</b>caisse et facture le jour même</div>
         </div>
       </div>
+      {MODE === 'api' && <Prices />}
       <small style={{ color: '#6ee7b7' }}>Conçu pour Dakar : adresses par repère, paiement à la livraison, Wave et Orange Money.</small>
     </aside>
     <main className="login-form">
@@ -163,9 +166,24 @@ function Login({ error }) {
         <Field label="Mot de passe"><input className="input" type="password" autoComplete="current-password" value={pw} onChange={(e) => setPw(e.target.value)} required /></Field>
         {err && <div className="flash bad">{errText(err)}</div>}
         <Btn kind="primary" type="submit" size="xl">Se connecter</Btn></form>}
-      <SuiteNexus where="connexion" />
+      {MODE === 'api' ? <PublicFooter /> : <SuiteNexus where="connexion" />}
     </main>
   </div>;
+}
+
+// Formules (page d'accueil publique) : quotas et prix réglés par la plateforme (GET /api/plans)
+function Prices() {
+  const [p, setP] = useState(null);
+  useEffect(() => { fetch('/api/plans').then((r) => r.json()).then(setP).catch(() => {}); }, []);
+  if (!p?.free) return null;
+  const lim = (v, what) => (v == null ? `${what} sans limite` : `${v} ${what}`);
+  return <div className="grid cols-2" style={{ gap: 12 }}>{[p.free, p.pro].map((x) => <div key={x.label} style={{ border: '1px solid rgb(255 255 255 / 25%)', borderRadius: 14, padding: 14 }}>
+    <b style={{ fontSize: '1.1rem' }}>{x.label}</b><div style={{ fontSize: '1.5rem', fontWeight: 800 }}>{x.price_fcfa ? `${x.price_fcfa.toLocaleString('fr-FR')} F / mois` : 'Gratuit'}</div>
+    <div className="small" style={{ color: '#a7f3d0' }}>{lim(x.orders_month, 'commandes par mois')} · {lim(x.couriers, 'chauffeurs')} · {lim(x.hubs, 'lieux')}</div></div>)}</div>;
+}
+function PublicFooter() {
+  return <p className="small muted" style={{ marginTop: 28 }}><a href="/mentions-legales.html">Mentions légales</a> · <a href="/cgu.html">Conditions d'utilisation</a> ·{' '}
+    <a href="/confidentialite.html">Confidentialité</a> · Paiement Wave ou Orange Money</p>;
 }
 
 // Version complète (Cloudflare) : connexion ou création d'une entreprise de livraison
@@ -238,7 +256,7 @@ function Shell({ me }) {
   const screens = {
     preparation: <Picking taskId={seg[1]} sub={seg[2]} />, entrepot: <Warehouse />, quai: <Dock sub={seg[1]} id={seg[2]} />, chauffeur: <Driver stopId={seg[2]} />,
     tour: <Control />, caisse: <Cash />, factures: <Billing invoiceId={seg[1]} />, sav: <Support />, colis: <Support code={seg[1]} />,
-    vendeur: <Vendor />, admin: <Admin />, analytique: <Analytics />, messages: <Messages />,
+    vendeur: <Vendor />, admin: <Admin />, analytique: <Analytics />, messages: <Messages />, plateforme: <Platform />,
   };
   const tiles = TILES.filter((t) => t.show(me));
   const content = seg[0] ? screens[seg[0]] ?? <Home me={me} tiles={tiles} /> : tiles.length === 1 ? screens[tiles[0].to.slice(1)] : <Home me={me} tiles={tiles} />;

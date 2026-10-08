@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /suivi/
+Disallow: /invitation/
+Sitemap: https://logistique.nexusmarket.sn/sitemap.xml

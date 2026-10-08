@@ -28,9 +28,10 @@ import caisse from './caisse.js';
 import factures from './factures.js';
 import pilotage from './pilotage.js';
 import messages from './messages.js';
+import offre, { isPlatformAdmin } from './offre.js';
 
 export const REGISTRY = { ...socle, ...tarifs, ...commandes, ...suivi, ...preparation, ...entrepot, ...flotte, ...voyages,
-  ...terrain, ...retours, ...caisse, ...factures, ...pilotage, ...messages };
+  ...terrain, ...retours, ...caisse, ...factures, ...pilotage, ...messages, ...offre };
 
 
 export async function buildContext(request, env) {
@@ -76,7 +77,11 @@ export async function handleRpc(request, env, name) {
   if (!def) throw new RpcFail('unknown_function', 404);
   const args = await readJson(request, 6_000_000);
   const ctx = await buildContext(request, env);
-  if (def.roles !== 'public') {
+  if (def.roles === 'platform') {
+    // administration de la plateforme : adresses de ADMIN_EMAILS, sans entreprise active nécessaire
+    if (!ctx.user) throw new RpcFail('auth', 401);
+    if (!isPlatformAdmin(env, ctx.user)) throw new RpcFail('forbidden', 403);
+  } else if (def.roles !== 'public') {
     if (!ctx.user) throw new RpcFail('auth', 401);
     if (!ctx.company) throw new RpcFail('no_company', 403);
     if (!def.allowBlocked && (await deviceBlocked(ctx))) throw new RpcFail('device_blocked', 403);

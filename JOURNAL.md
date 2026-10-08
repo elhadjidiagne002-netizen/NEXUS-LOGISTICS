@@ -2,6 +2,17 @@
 
 Le plus récent en premier.
 
+## 08/10/2026 — Cycle C9 (Cloudflare) : offre payante, plateforme, site public
+- **Fait** : `migrations/0009_offre.sql` (paiements d'abonnement déclarés, erreurs de l'interface) ;
+  `server/rpc/offre.js` (formules, quotas, abonnement, administration de la plateforme) ; `server/routes/public.js`
+  (`GET /api/plans`, `POST /api/errors`) ; rôle `platform` dans le répartiteur (adresses `ADMIN_EMAILS`, sans
+  entreprise active) ; écrans Plateforme et Administration → Abonnement ; formules sur la page d'accueil ; pages
+  légales statiques, robots, sitemap, balises de partage ; remontée des erreurs JavaScript (`src/lib/report.js`).
+- **Choix** : paiement déclaré + validation humaine (aucun prestataire de paiement payant) ; quota de lieux à 2 en
+  gratuit (un dépôt et un relais) ; une entreprise suspendue perd l'accès ET ses pages de suivi.
+- **État** : 74 tests serveur, 12 unitaires, builds OK ; accueil, abonnement et validation d'un paiement vérifiés.
+- **À faire en ligne** : migration `0009_offre.sql` ; `ADMIN_EMAILS` (variable Pages) avec votre adresse.
+
 ## 08/10/2026 — Cycle C8 (Cloudflare) : messages aux clients
 - **Fait** : `migrations/0008_messages.sql` (modèles modifiés, file d'envoi, instance WhatsApp de l'entreprise) ;
   `server/rpc/messages.js` (modèles, rendu, file, envoi Green API / Brevo, réponses) ; `server/routes/whatsapp.js`

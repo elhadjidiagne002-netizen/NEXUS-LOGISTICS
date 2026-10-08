@@ -6,9 +6,12 @@ import * as apiV1 from './routes/api-v1.js';
 import * as files from './routes/files.js';
 import * as cron from './routes/cron.js';
 import * as whatsapp from './routes/whatsapp.js';
+import * as site from './routes/public.js';
 
 const ROUTES = [
   ['GET', /^\/api\/health$/, () => json({ ok: true, service: 'nexus-logistics' })],
+  ['GET', /^\/api\/plans$/, site.plans],
+  ['POST', /^\/api\/errors$/, site.report],
   ['POST', /^\/api\/auth\/register$/, account.register],
   ['POST', /^\/api\/auth\/login$/, account.login],
   ['POST', /^\/api\/auth\/logout$/, account.logout],

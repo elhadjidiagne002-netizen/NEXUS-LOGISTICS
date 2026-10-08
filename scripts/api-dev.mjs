@@ -9,7 +9,7 @@ import { D1Mock } from '../test/helpers/d1-mock.js';
 const port = Number(process.argv[2] || process.env.API_PORT || 8789);
 const dbPath = process.argv[3] || fileURLToPath(new URL('../.wrangler/dev.sqlite', import.meta.url));
 if (dbPath !== ':memory:') mkdirSync(new URL('../.wrangler/', import.meta.url), { recursive: true });
-const env = { DB: new D1Mock(dbPath) };
+const env = { DB: new D1Mock(dbPath), ...Object.fromEntries(['ADMIN_EMAILS', 'CRON_SECRET', 'SECRETS_KEY', 'BREVO_API_KEY'].filter((k) => process.env[k]).map((k) => [k, process.env[k]])) };
 
 createServer(async (req, res) => {
   const chunks = [];

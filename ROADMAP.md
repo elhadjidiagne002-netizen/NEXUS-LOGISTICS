@@ -144,12 +144,16 @@ l'aperçu (`logistics-full`), migrations D1 appliquées en ligne, déploiement d
 - Reste : migration `0008` à appliquer en ligne ; secrets `SECRETS_KEY` (et `BREVO_API_KEY` si e-mail de secours)
       à poser (voir `wrangler.toml`) ; versions wolof des modèles à faire rédiger ; relances vendeurs → C11.
 
-## C9 — Offre payante et site public
-- [ ] Formules : gratuite (quotas : livraisons par mois, chauffeurs, lieux) et Pro (abonnement mensuel),
-      comme Devizo et My shop ; paiement **Wave / Orange Money déclaré** puis activé par l'admin plateforme.
-- [ ] Administration de la plateforme (`ADMIN_EMAILS`) : entreprises, formules, suspension, statistiques.
-- [ ] Page d'accueil commerciale (avantages, tarifs, inscription), mentions légales, CGU, confidentialité,
-      `robots.txt`, `sitemap.xml`, partage social ; suivi des erreurs (remontée maison, Sentry si projet créé).
+## C9 — Offre payante et site public ✅ (08/10/2026)
+- [x] Formules gratuite (300 commandes par mois, 3 chauffeurs, 2 lieux) et Pro (15 000 F par mois), réglables par la
+      plateforme (`app_settings` « plans ») ; quotas contrôlés à la création (commandes, chauffeurs, lieux) ; paiement
+      **Wave / Orange Money déclaré** (`lg_plan_declare`) puis validé par la plateforme, qui prolonge de 30 jours par mois.
+- [x] Administration de la plateforme (`ADMIN_EMAILS`, rôle `platform`, écran /plateforme) : entreprises, formules,
+      suspension, paiements, statistiques, erreurs remontées (`POST /api/errors`, limité à 20 par heure et par adresse).
+- [x] Page d'accueil avec les formules (`GET /api/plans`), mentions légales, CGU, confidentialité, `robots.txt`,
+      `sitemap.xml`, balises de partage ; onglet Administration → Abonnement. 5 tests serveur.
+- Reste : migration `0009` à appliquer en ligne ; variable `ADMIN_EMAILS` à poser sur Pages ; numéros Wave / Orange
+      Money à saisir dans Plateforme → Formules ; Sentry non branché (suivi maison suffisant pour l'instant).
 
 ## C10 — Intégration NEXUS Market
 - [ ] Lecture de l'état d'une commande par l'API (`GET /api/v1/orders/<référence>`), pour les boutiques.

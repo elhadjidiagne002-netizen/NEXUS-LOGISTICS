@@ -9,6 +9,7 @@ import { randomToken, sha256Hex } from '../crypto.js';
 import { chunks } from '../http.js';
 import { loadPricing, computeQuote, insuranceFee, zoneAt, SERVICES } from './tarifs.js';
 import { releaseStatements } from './preparation.js';
+import { checkQuota } from './offre.js';
 import { notifyOrder, notifyPerson, sendLater, hhmm } from './messages.js';
 
 export const IMPORT_MAX = 50;          // commandes par appel (import CSV, API) : budget de requêtes D1
@@ -176,6 +177,7 @@ export async function createOrders(ctx, inputs, source) {
     results.push(null);
   });
   if (stmts.length) {
+    await checkQuota(ctx, 'orders_month', built.length);
     let res;
     try { res = await ctx.db.batch(stmts); } catch (e) {
       if (/UNIQUE/i.test(String(e?.message))) fail('duplicate_ref', 409); // envoi simultané de la même référence

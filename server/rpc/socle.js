@@ -4,6 +4,7 @@
 import { sha256Hex, randomToken } from '../crypto.js';
 import { cleanConfig, parseSettings } from '../config.js';
 import { fail, audit } from './core.js';
+import { isPlatformAdmin, effectivePlan, checkQuota } from './offre.js';
 
 const STAFF_ROLES = ['picker', 'dock_chief', 'dispatcher', 'cashier', 'accountant', 'support'];
 const VEHICLE_KINDS = ['moto', 'velo', 'voiture', 'fourgonnette', 'tricycle', 'pied'];
@@ -45,6 +46,8 @@ export default {
         hubs,
         company: { id: c.id, name: c.name, slug: c.slug, kind: c.kind, city: c.city, phone: c.phone, plan: c.plan, plan_until: c.plan_until },
         companies,
+        is_platform_admin: isPlatformAdmin(ctx.env, ctx.user),
+        plan: effectivePlan(c, ctx.now),
         location: loc ?? null,   // adresse de collecte (vendeur)
         config: { max_attempts: c.config.max_attempts, require_photo: c.config.require_photo, proof_radius_m: c.config.proof_radius_m, heavy_kg: c.config.heavy_kg },
       };
@@ -142,6 +145,7 @@ export default {
       if (!['admin', 'staff', 'vendor', 'courier'].includes(role)) fail('invalid_role');
       if (role === 'admin' && ctx.member !== 'owner') fail('owner_only', 403);
       const staff = Array.isArray(a.p_staff_roles) ? a.p_staff_roles.filter((r) => STAFF_ROLES.includes(r)) : [];
+      if (role === 'courier') await checkQuota(ctx, 'couriers');
       const token = randomToken(24);
       const expires = new Date(Date.now() + INVITE_DAYS * 86400000).toISOString();
       await ctx.db.prepare('INSERT INTO invites (token_hash, company_id, role, staff_roles, name, created_by, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
@@ -202,6 +206,7 @@ export default {
           .bind(name, text(a.p_phone, 30), kind, userId, bool(a.p_active !== false), id, ctx.company.id).run();
         if (!r.meta.changes) fail('unknown_courier', 404);
       } else {
+        await checkQuota(ctx, 'couriers');
         await ctx.db.prepare('INSERT INTO couriers (id, company_id, user_id, name, phone, vehicle_kind) VALUES (?, ?, ?, ?, ?, ?)')
           .bind(id, ctx.company.id, userId, name, text(a.p_phone, 30), kind).run();
       }
@@ -225,6 +230,7 @@ export default {
           .bind(name, kind, text(a.p_address, 200), lat, lng, bool(a.p_active !== false), id, ctx.company.id).run();
         if (!r.meta.changes) fail('unknown_hub', 404);
       } else {
+        await checkQuota(ctx, 'hubs');
         await ctx.db.prepare('INSERT INTO hubs (id, company_id, name, kind, address, lat, lng) VALUES (?, ?, ?, ?, ?, ?, ?)')
           .bind(id, ctx.company.id, name, kind, text(a.p_address, 200), lat, lng).run();
       }

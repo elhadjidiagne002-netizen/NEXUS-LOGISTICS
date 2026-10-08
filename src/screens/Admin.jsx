@@ -9,11 +9,11 @@ export default function Admin() {
   const me = useMe();
   const [tab, setTab] = useState(me.is_admin ? 'staff' : 'fleet');
   const tabs = me.is_admin ? [['staff', 'Rôles'], ['fleet', 'Flotte'], ['pricing', 'Tarifs et zones'], ['devices', 'Appareils'], ['config', 'Réglages'],
-    ...(MODE === 'api' ? [['api', 'API boutiques'], ['whatsapp', 'WhatsApp']] : [])] : [['fleet', 'Flotte']];
+    ...(MODE === 'api' ? [['plan', 'Abonnement'], ['api', 'API boutiques'], ['whatsapp', 'WhatsApp']] : [])] : [['fleet', 'Flotte']];
   return <>
     <PageHead title="Administration" back="/" />
     <Tabs tabs={tabs} value={tab} onChange={setTab} />
-    {tab === 'staff' && <Staff />}{tab === 'fleet' && <Fleet />}{tab === 'pricing' && <Pricing />}{tab === 'config' && <Config />}{tab === 'devices' && <Devices />}{tab === 'api' && <ApiKeys />}{tab === 'whatsapp' && <WhatsApp />}
+    {tab === 'staff' && <Staff />}{tab === 'fleet' && <Fleet />}{tab === 'pricing' && <Pricing />}{tab === 'config' && <Config />}{tab === 'devices' && <Devices />}{tab === 'api' && <ApiKeys />}{tab === 'whatsapp' && <WhatsApp />}{tab === 'plan' && <Plan />}
   </>;
 }
 
@@ -322,6 +322,34 @@ function NewZone({ empty, reload }) {
 }
 
 // Clés d'API : les boutiques en ligne envoient leurs commandes payées (POST /api/v1/orders)
+// Formule de l'entreprise : utilisation, quotas, passage à la formule Pro par paiement Wave / Orange Money déclaré.
+function Plan() {
+  const { data: d, error, reload } = useRpc('lg_plan_status', {});
+  const [f, setF] = useState({ months: 1, method: 'wave', ref: '' }); const [run, busy] = useAction();
+  if (!d) return <ErrorBox error={error} />;
+  const bar = (k, label) => { const lim = d.limits[k]; const u = d.usage[k];
+    return <div key={k} style={{ marginBottom: 10 }}><div className="row between small"><span>{label}</span><b>{u}{lim != null ? ` / ${lim}` : ''}</b></div>
+      {lim != null && <div className="gauge" style={{ gridTemplateColumns: '1fr' }}><div className="bar"><i style={{ width: `${Math.min(100, (100 * u) / Math.max(lim, 1))}%` }} /></div></div>}</div>; };
+  const pending = d.payments.find((p) => p.status === 'pending');
+  return <div className="split">
+    <Card><h3>Formule {d.label}{d.plan === 'pro' && d.plan_until ? ` · jusqu'au ${dmy(d.plan_until)}` : ''}</h3>
+      {bar('orders_month', 'Commandes ce mois-ci')}{bar('couriers', 'Chauffeurs actifs')}{bar('hubs', 'Lieux')}
+      {d.payments.length > 0 && <><h3 style={{ marginTop: 14 }}>Paiements</h3><div className="list">{d.payments.map((p) => <div key={p.id} className="line">
+        <span className="grow">{p.months} mois · {formatF(p.amount_fcfa)} · réf. <span className="mono">{p.ref}</span><div className="small muted">déclaré le {dmy(p.declared_at)}{p.note ? ` · ${p.note}` : ''}</div></span>
+        <Badge kind={{ approved: 'ok', rejected: 'bad' }[p.status] ?? 'todo'}>{{ approved: 'validé', rejected: 'refusé', pending: 'en vérification' }[p.status]}</Badge></div>)}</div></>}</Card>
+    <Card><h3>Passer à la formule Pro</h3>
+      <p className="small">{formatF(d.plans.pro.price_fcfa)} par mois · commandes, chauffeurs et lieux sans limite.</p>
+      <p className="small">Payez par <b>Wave</b>{d.payment.wave ? ` au ${d.payment.wave}` : ''} ou <b>Orange Money</b>{d.payment.orange_money ? ` au ${d.payment.orange_money}` : ''}
+        {d.payment.name ? ` (${d.payment.name})` : ''}, puis déclarez le paiement : la formule s'active dès sa vérification.</p>
+      {pending ? <div className="flash todo">Paiement de {formatF(pending.amount_fcfa)} en cours de vérification.</div> : <>
+        <div className="grid cols-2"><Field label="Durée"><select className="input" value={f.months} onChange={(e) => setF({ ...f, months: Number(e.target.value) })}>
+          {[1, 3, 6, 12].map((m) => <option key={m} value={m}>{m} mois · {formatF(m * d.plans.pro.price_fcfa)}</option>)}</select></Field>
+          <Field label="Moyen"><select className="input" value={f.method} onChange={(e) => setF({ ...f, method: e.target.value })}><option value="wave">Wave</option><option value="orange_money">Orange Money</option></select></Field></div>
+        <Field label="Référence de la transaction"><input className="input mono" value={f.ref} onChange={(e) => setF({ ...f, ref: e.target.value })} /></Field>
+        <Btn kind="primary" disabled={busy || f.ref.trim().length < 4} onClick={() => run(async () => { const r = await rpc('lg_plan_declare', { p_months: f.months, p_method: f.method, p_ref: f.ref }); reload(); return r; }, { ok: 'Paiement déclaré' })}>Déclarer le paiement</Btn></>}</Card>
+  </div>;
+}
+
 // Envoi automatique des messages par l'instance WhatsApp de l'entreprise (Green API) ; sans elle, envoi manuel gratuit (wa.me).
 function WhatsApp() {
   const { data, error, reload } = useRpc('lg_channel_get', {});
