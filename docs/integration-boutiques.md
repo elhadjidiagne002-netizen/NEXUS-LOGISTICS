@@ -13,12 +13,14 @@ Content-Type: application/json
 { "external_ref": "NXM-2026-0042",
   "customer": { "name": "Aminata Fall", "phone": "771234567", "address": "Liberté 6", "landmark": "près de la mosquée" },
   "zone": "Yoff",
-  "payment_method": "prepaid",            // ou "cod" (paiement à la livraison)
+  "payment_method": "prepaid",            // ou "cod" (à la livraison), ou "account" (à terme, sur facture)
   "items": [{ "name": "Riz 5 kg", "quantity": 1, "unit_price_fcfa": 5000, "weight_g": 5000 }] }
 ```
 - Prix unitaire en FCFA entiers (`unit_price_fcfa` ; `price_fcfa` est aussi accepté). `zone` = nom d'une zone créée
   dans Administration → Tarifs et zones (sans tenir compte des accents ni des majuscules), ou bien `customer.lat` /
   `customer.lng` : sans zone reconnue, la commande est refusée (`unknown_zone`).
+- À terme (`"account"`) : délai en jours dans `payment_terms_days` (sinon celui du client, sinon 30) ; rien n'est
+  encaissé à la livraison, la facture porte l'échéance. `promised_at` (AAAA-MM-JJ) impose une date de livraison.
 - Une même `external_ref` n'est jamais créée deux fois : un renvoi rend la commande existante (`duplicate: true`).
 - Jusqu'à 50 commandes d'un coup : `{ "orders": [ … ] }`. 300 appels par heure et par clé.
 

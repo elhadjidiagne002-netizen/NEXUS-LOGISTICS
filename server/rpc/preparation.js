@@ -52,7 +52,7 @@ export function releaseStatements(ctx, order) {
                                  WHERE vc.company_id = o.company_id AND vc.vendor_id = o.vendor_id) x), ?1, ?3),
               ?5 FROM orders o JOIN companies c ON c.id = o.company_id
         WHERE o.id = ?6 AND o.company_id = ?7 AND o.status <> 'cancelled'
-          AND (o.payment_status = 'paid' OR (o.payment_method = 'cod' AND o.cod_confirmed_at IS NOT NULL))
+          AND (o.payment_status = 'paid' OR o.payment_terms_days IS NOT NULL OR (o.payment_method = 'cod' AND o.cod_confirmed_at IS NOT NULL))
           AND NOT EXISTS (SELECT 1 FROM pick_tasks t WHERE t.order_id = o.id AND t.status <> 'cancelled')
           AND EXISTS (SELECT 1 FROM order_items oi LEFT JOIN products p ON p.id = oi.product_id
                        WHERE oi.order_id = o.id AND oi.line_status <> 'cancelled' AND coalesce(p.is_shippable, 1) = 1)`,
@@ -121,7 +121,7 @@ export default {
       if (!staff && ctx.member !== 'vendor') fail('forbidden', 403);
       const r = await ctx.db.prepare(
         `SELECT t.id, t.order_id, t.status, t.cutoff_at, t.picker_id, t.last_activity_at, o.number, o.delivery_zone AS zone, o.vendor_name,
-                o.payment_method, u.name AS picker_name,
+                o.payment_method, o.payment_terms_days, u.name AS picker_name,
                 (SELECT COUNT(*) FROM pick_lines l WHERE l.task_id = t.id) AS lines,
                 (SELECT coalesce(sum(qty_ordered), 0) FROM pick_lines l WHERE l.task_id = t.id) AS units
            FROM pick_tasks t JOIN orders o ON o.id = t.order_id LEFT JOIN users u ON u.id = t.picker_id

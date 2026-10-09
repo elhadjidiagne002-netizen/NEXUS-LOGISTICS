@@ -213,7 +213,9 @@ export default {
 
   /**
    * Bon de commande vérifié → commande (référence externe = n° du bon : un même bon ne crée jamais deux commandes).
-   * p_customer {name, phone, address}, p_zone, p_payment_method. Lignes sans produit du catalogue : reprises en
+   * p_customer {name, phone, address}, p_zone, p_payment_method ('cod' | 'prepaid' | 'account' ; défaut : 'account'
+   * si le bon porte un délai de paiement, sinon le mode habituel du client), p_terms_days, p_promised_at (défaut :
+   * la date de livraison impérative du bon). Lignes sans produit du catalogue : reprises en
    * article libre (libellé, prix) si p_free_lines, sinon refus.
    */
   lg_inbox_convert: {
@@ -236,7 +238,10 @@ export default {
         external_ref: data.order_number ? `${scopeOf(d.sender) || 'bon'}:${data.order_number}` : `doc:${d.id}`,
         customer: { name: text(c.name, 80) ?? data.customer?.store ?? data.customer?.name, phone: text(c.phone, 30) ?? data.customer?.phone,
           address: text(c.address, 200) ?? data.delivery_place ?? data.customer?.address },
-        zone: a.p_zone, payment_method: a.p_payment_method === 'prepaid' ? 'prepaid' : 'cod', items,
+        zone: a.p_zone, items,
+        payment_method: ['cod', 'prepaid', 'account'].includes(a.p_payment_method) ? a.p_payment_method : data.payment_terms_days != null ? 'account' : undefined,
+        payment_terms_days: a.p_terms_days ?? data.payment_terms_days ?? undefined,
+        promised_at: a.p_promised_at ?? data.delivery_date ?? undefined,
         note: `Bon ${data.order_number ?? ''} lu par l'IA (${d.filename ?? 'document'})${data.delivery_date ? ` · livraison impérative ${data.delivery_date}` : ''}`.trim(),
       }], 'manual');
       if (!r.ok) return { ok: false, error: r.error };

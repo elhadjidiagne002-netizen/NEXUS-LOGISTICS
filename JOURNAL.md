@@ -2,6 +2,47 @@
 
 Le plus récent en premier.
 
+## 09/10/2026 — Paiement à terme (sur facture) : la chaîne bon d'enseigne → préparation → livraison → encaissement
+- **Problème** : un bon d'enseigne (ex. Auchan, « 15 JOURS ») converti en commande ne pouvait être que « à la
+  livraison » (bloqué en attente de confirmation, chauffeur chargé d'encaisser) ou « payé d'avance » (marqué payé
+  alors que rien n'est reçu). La chaîne se cassait juste après la collecte.
+- **Fait** (migration `0016_paiement_a_terme.sql`, `server/rpc/creances.js`) : troisième mode **« à terme »**
+  (`account`). La commande part tout de suite en préparation, le chauffeur n'a rien à encaisser, l'échéance est
+  fixée à la livraison (livraison + délai), la facture porte l'échéance et le n° du bon du client, et la somme reste
+  « à régler » jusqu'au règlement enregistré par la comptabilité (virement, chèque… avec référence).
+  - Délai : celui demandé, sinon celui mémorisé pour le client (client « en compte » : ses commandes suivantes
+    sont à terme par défaut), sinon `payment_terms_days` de l'entreprise, sinon 30 jours.
+  - Date de livraison imposée (`promised_at`) acceptée à la saisie, à l'import et depuis le bon collecté.
+  - Collecte : l'IA lit le délai de paiement du bon (`payment_terms_days`) ; la conversion propose « À terme »
+    avec ce délai et la date de livraison impérative.
+  - Factures → « Créances à terme » : balance âgée (pas échu, ≤ 30 j, 31–60 j, + 60 j), clients qui doivent le
+    plus, retard en jours, bouton « Enregistrer le règlement ». Les factures non réglées s'affichent « à régler »
+    ou « en retard », plus jamais « payée ».
+  - Relances automatiques (tâche `reminders` de nexus-cron) : 3 jours avant l'échéance, après l'échéance, puis
+    à + 15 jours ; une seule fois par étape, jamais la nuit ; modèles modifiables `lg_invoice_due_soon` et
+    `lg_invoice_overdue` dans Messages.
+  - Import CSV : colonne paiement « à terme », « 30 jours », « facture » → à terme (le nombre = le délai).
+  - API boutiques : `payment_method: "account"` (+ `payment_terms_days`) accepté et renvoyé.
+- **Piège évité** : la contrainte `orders.payment_method IN ('cod','prepaid')` n'a PAS été modifiée. Reconstruire
+  la table (seul moyen de changer un CHECK en SQLite) supprime l'ancienne, ce qui déclenche les `ON DELETE
+  CASCADE` : vérifié en local, **toutes les lignes de commande auraient été effacées en production**. Une commande
+  à terme est donc stockée `prepaid` + `payment_status = 'pending'` + `payment_terms_days` non nul ; `payMode()`
+  donne le mode réel (règle 11 du CLAUDE.md).
+- **Tests** : 111/111 (dont `test/server/creances.test.js` : parcours complet, client en compte, refus, isolation).
+
+## 09/10/2026 — Collecte : bons de commande reçus lus par l'IA
+- **Demande** : automatiser la collecte des données avant la préparation (comme le script de l'utilisateur qui lit
+  les bons d'enseigne reçus par e-mail), mais pour tout type de document et toute entreprise.
+- **Fait** (migration `0015_collecte.sql`, `server/extract.js`, `server/rpc/collecte.js`, écran « Commandes
+  reçues ») : adresse de réception par entreprise (`<clé>@commandes.nexusmarket.sn`), dépôt de fichier ou photo,
+  conversion en texte (Workers AI : PDF, Excel, Word, image), lecture par Groq (repli Workers AI), rapprochement
+  des lignes au catalogue (correspondances apprises, EAN, référence, nom), quantité = colis × PCB, contrôles
+  (n° de bon absent du document, total ≠ somme des lignes), vérification côte à côte avec l'original, conversion
+  en commande sans doublon (référence = n° du bon), modèles d'extraction par expéditeur, export Excel croisé.
+- **Vérifié** sur un vrai bon Auchan (fichier local, jamais versionné) : n° 23716, 7 lignes, total juste.
+- **Déployé** (commit e79c682). **Reste** : Worker e-mail + routage Cloudflare Email de
+  `commandes.nexusmarket.sn`, secrets `INBOUND_SECRET` et `GROQ_API_KEY` (clé Groq à créer par l'utilisateur).
+
 ## 08/10/2026 — Scan des codes-barres à l'entrée en stock
 - **Demande** : pouvoir scanner le code-barres pour faire entrer les produits en stock.
 - **Fait** (même composant de scan que la préparation : caméra du téléphone avec détection native ou bibliothèque
@@ -668,17 +709,20 @@ branche de test Supabase, puis décisions 1 à 3 du chapitre 14 (voir `CLAUDE.md
 Dépôt git initialisé, aucun commit.
 
 ## État actuel des intégrations
-- Base : migrations prêtes, **non appliquées** (ni test ni prod).
-- Messages : déposés dans `notification_outbox` (événements `lg_*`) **avec leur texte final**
-  (`vars.texte`, modèles modifiables) ; envoi codé côté NEXUS (WhatsApp, e-mail Brevo en secours,
-  `lg-fallback.js`) — actif dès que les migrations seront appliquées.
-- Planificateur : `lg_watchdog`, `lg_vendor_reminders`, `lg_purge`, `lg_evening_report` prêts, non planifiés.
+- Base : D1 `nexus-logistics`, migrations 0001 à 0016 appliquées automatiquement au déploiement.
+- Messages : file `outbox` de la D1, envoi WhatsApp (lien wa.me ou instance de l'entreprise), e-mail Brevo en secours.
+- Planificateur : nexus-cron (dépôt nexus-market) appelle watchdog, reminders (vendeurs + impayés), messages,
+  purge, evening.
+- Collecte : dépôt de fichier actif ; réception par e-mail en attente du Worker e-mail et des secrets.
 - Hébergement : Cloudflare Pages `nexus-logistics`, **https://logistique.nexusmarket.sn** = version complète
   (bascule du 08/10/2026), déploiement automatique à chaque push sur `main` (migrations D1 comprises).
 - Base de la version complète : D1 `nexus-logistics` (migration 0001 appliquée). La base Supabase de NEXUS
   n'est plus la cible : les migrations `supabase/` ne seront PAS appliquées (archive de référence).
 
 ## Chantiers en attente
+- **Collecte par e-mail** : Worker e-mail + Email Routing `commandes.nexusmarket.sn`, secrets `INBOUND_SECRET`, `GROQ_API_KEY`.
+- **Suite de la chaîne B2B** : tarifs et TVA par enseigne, magasins d'une enseigne (fiche client → zone/téléphone
+  préremplis), tournées, vente embarquée, caisses consignées, taux de service, règlements partiels.
 - **Portage Cloudflare : cycles C2 à C11 de `ROADMAP.md`** (le reste de cette liste vient après).
 - Connexion chauffeur par téléphone + code à 4 chiffres (exige une fonction serveur qui
   émet la session ; colonne `couriers.pin_hash` prévue).

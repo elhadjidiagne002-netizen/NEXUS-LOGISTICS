@@ -360,12 +360,13 @@ export default {
           ctx.db.prepare('UPDATE trips SET cash_collected_fcfa = cash_collected_fcfa + ?, updated_at = ? WHERE id = ? AND company_id = ?').bind(cash, ctx.now, s.trip_id, cid),
           ctx.db.prepare('UPDATE couriers SET deliveries_done = deliveries_done + 1 WHERE id = ? AND company_id = ?').bind(t.courier_id, cid),
           ...courierPos(ctx, t.courier_id, p),
-          // commande livrée quand tous ses colis le sont ; payée si paiement à la livraison
+          // commande livrée quand tous ses colis le sont ; payée si paiement à la livraison ; à terme : échéance = livraison + délai
           ctx.db.prepare(`UPDATE orders SET status = 'delivered', delivered_at = ?, updated_at = ?,
               payment_status = CASE WHEN payment_method = 'cod' THEN 'paid' ELSE payment_status END,
-              paid_at = CASE WHEN payment_method = 'cod' THEN coalesce(paid_at, ?) ELSE paid_at END
+              paid_at = CASE WHEN payment_method = 'cod' THEN coalesce(paid_at, ?) ELSE paid_at END,
+              due_at = CASE WHEN payment_terms_days IS NOT NULL THEN strftime('%Y-%m-%dT%H:%M:%fZ', ?, '+' || payment_terms_days || ' days') ELSE due_at END
             WHERE id = ? AND company_id = ? AND NOT EXISTS (SELECT 1 FROM packages WHERE order_id = ? AND status NOT IN ('delivered', 'cancelled'))`)
-            .bind(ctx.now, ctx.now, ctx.now, s.order_id, cid, s.order_id),
+            .bind(ctx.now, ctx.now, ctx.now, ctx.now, s.order_id, cid, s.order_id),
         );
         // adresse vérifiée pour la prochaine fois (pas si la remise s'est faite loin de l'adresse prévue)
         if (p.lat != null && o?.phone_key && !far) stmts.push(ctx.db.prepare(
@@ -384,7 +385,7 @@ export default {
         const limit = (await ctx.db.prepare('SELECT cash_limit_fcfa FROM couriers WHERE id = ?').bind(t.courier_id).first('cash_limit_fcfa')) ?? Number(cfg.cash_limit_fcfa ?? 150000);
         if (inHand > limit) await alertStatement(ctx, cid, 'cash_limit', 'critical', `Le chauffeur du voyage ${t.number} porte ${inHand} F (plafond ${limit} F)`,
           { trip: t.id, dedupe: `cash_limit:${t.id}` }).run();
-        await sendLater(ctx, [await notifyOrder(ctx, 'lg_delivered', o ? { ...o, status: 'delivered', payment_status: 'paid' } : null,
+        await sendLater(ctx, [await notifyOrder(ctx, 'lg_delivered', o ? { ...o, status: 'delivered', payment_status: o.payment_terms_days != null ? o.payment_status : 'paid' } : null,
           { heure: hhmm(ctx.now), facture: invoice ?? '' }), webhookStatement(ctx, s.order_id, 'order.delivered', { invoice, proof, collected_fcfa: paid })]);
         const next = await advanceTrip(ctx, t.id);
         return { ok: true, far, distance_m: dist, cash_in_hand_fcfa: inHand, must_remit: inHand > limit, invoice, next_stop: next };

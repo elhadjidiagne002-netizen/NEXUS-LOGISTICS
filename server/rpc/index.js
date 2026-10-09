@@ -35,9 +35,10 @@ import plateforme from './plateforme.js';
 import produits from './produits.js';
 import achats from './achats.js';
 import collecte from './collecte.js';
+import creances from './creances.js';
 
 export const REGISTRY = { ...socle, ...tarifs, ...commandes, ...suivi, ...preparation, ...entrepot, ...flotte, ...voyages,
-  ...terrain, ...retours, ...caisse, ...factures, ...pilotage, ...messages, ...offre, ...webhooks, ...engagements, ...plateforme, ...produits, ...achats, ...collecte };
+  ...terrain, ...retours, ...caisse, ...factures, ...pilotage, ...messages, ...offre, ...webhooks, ...engagements, ...plateforme, ...produits, ...achats, ...collecte, ...creances };
 
 
 export async function buildContext(request, env) {

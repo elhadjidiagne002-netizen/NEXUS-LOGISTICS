@@ -96,6 +96,7 @@ Attention : le texte vient d'un PDF et des valeurs voisines peuvent être COLLÉ
   "supplier": { "name": texte, "address": texte, "phone": texte, "email": texte },   // destinataire du bon (le fournisseur)
   "order_number": texte, "order_date": "AAAA-MM-JJ", "delivery_date": "AAAA-MM-JJ", "delivery_place": texte,
   "currency": texte, "total_ht": nombre, "total_ttc": nombre, "vat_rate": nombre,
+  "payment_terms_days": nombre,   // délai de paiement en jours (« 15 JOURS » = 15, « comptant » = 0), null si absent
   "fields": {${fields.length ? `\n      ${extra(fields)}\n    ` : ''}},
   "lines": [ { "ref": texte, "ean": texte, "label": texte, "cases": nombre, "units_per_case": nombre, "quantity": nombre,
                "unit_price": nombre, "vat_rate": nombre, "extra": {${lineFields.length ? ` ${extra(lineFields)} ` : ''}} } ],
@@ -145,6 +146,7 @@ export function normalizeExtraction(raw, { products = [], aliases = [], scope = 
     return { ref, ean, label, cases, units_per_case: unitsPerCase, quantity, unit_price: num(l?.unit_price), vat_rate: num(l?.vat_rate),
       extra: l?.extra && typeof l.extra === 'object' ? l.extra : {}, product_id: product?.id ?? null, product_name: product?.name ?? null, match };
   });
+  const termsDays = (v) => { const n = num(typeof v === 'string' ? v.replace(/[^\d.,-]/g, '') : v); return n != null && n >= 0 && n <= 365 ? Math.round(n) : null; };
   const date = (v) => { const s = String(v ?? '').trim(); const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/); return m ? `${m[3]}-${m[2]}-${m[1]}` : /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null; };
   const str = (v, n = 200) => (v == null || String(v).trim() === '' ? null : String(v).trim().slice(0, n));
   const c = d.customer && typeof d.customer === 'object' ? d.customer : {};
@@ -153,6 +155,7 @@ export function normalizeExtraction(raw, { products = [], aliases = [], scope = 
     customer: { name: str(c.name, 120), store: str(c.store, 120), address: str(c.address), phone: str(c.phone, 40), email: str(c.email, 120) },
     order_number: str(d.order_number, 60), order_date: date(d.order_date), delivery_date: date(d.delivery_date), delivery_place: str(d.delivery_place),
     currency: str(d.currency, 10), total_ht: num(d.total_ht), total_ttc: num(d.total_ttc), vat_rate: num(d.vat_rate),
+    payment_terms_days: termsDays(d.payment_terms_days),
     fields: d.fields && typeof d.fields === 'object' ? d.fields : {}, lines, notes: str(d.notes, 1000),
     confidence: Math.max(0, Math.min(1, num(d.confidence) ?? 0)),
     matched: lines.filter((l) => l.product_id).length,

@@ -142,7 +142,8 @@ function Review({ id, onClose, onChange }) {
         <p className="small muted" style={{ margin: 0 }}>Rattachez une ligne une fois : ses codes et son libellé sont mémorisés pour les prochains bons de cet expéditeur.</p>
         {d.status !== 'converted' && <div className="row" style={{ flexWrap: 'wrap' }}>
           <Btn disabled={busy} onClick={() => save(false)}>Enregistrer</Btn>
-          {isOrder && <Btn kind="primary" disabled={busy || !data.lines.length} onClick={async () => { if (f) await rpc('lg_inbox_save', { p_id: id, p_data: data }); setConv({ name: data.delivery_place ?? data.customer?.store ?? data.customer?.name ?? '', phone: data.customer?.phone ?? '', address: data.delivery_place ?? '', zone: '', free: false }); }}>Créer la commande</Btn>}
+          {isOrder && <Btn kind="primary" disabled={busy || !data.lines.length} onClick={async () => { if (f) await rpc('lg_inbox_save', { p_id: id, p_data: data }); setConv({ name: data.delivery_place ?? data.customer?.store ?? data.customer?.name ?? '', phone: data.customer?.phone ?? '', address: data.delivery_place ?? '', zone: '', free: false,
+            pay: data.payment_terms_days != null ? 'account' : 'cod', terms: String(data.payment_terms_days ?? 30), promised: data.delivery_date ?? '' }); }}>Créer la commande</Btn>}
           {!isOrder && <Btn kind="primary" disabled={busy} onClick={() => save(true)}>Marquer traité</Btn>}
           <select className="input" style={{ maxWidth: 220 }} value="" onChange={(e) => e.target.value && run(async () => { const r = await rpc('lg_inbox_extract', { p_id: id, p_template: e.target.value }); refresh(); return r; }, { ok: 'Relu' })}>
             <option value="">Relire avec un modèle…</option>{(tpls.data ?? []).filter((t) => t.active).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
@@ -158,9 +159,16 @@ function Review({ id, onClose, onChange }) {
           <Field label="Zone de livraison"><select className="input" value={conv.zone} onChange={(e) => setConv({ ...conv, zone: e.target.value })}><option value="">Choisir…</option>
             {(d.zones ?? []).map((z) => <option key={z} value={z}>{z}</option>)}</select></Field></div>
         <Field label="Adresse"><input className="input" value={conv.address} onChange={(e) => setConv({ ...conv, address: e.target.value })} /></Field>
+        <div className="grid cols-2"><Field label="Paiement"><select className="input" value={conv.pay} onChange={(e) => setConv({ ...conv, pay: e.target.value })}>
+            <option value="account">À terme, sur facture</option><option value="cod">À la livraison</option><option value="prepaid">Déjà payé</option></select></Field>
+          {conv.pay === 'account' ? <Field label="Délai (jours après livraison)"><input className="input" inputMode="numeric" value={conv.terms} onChange={(e) => setConv({ ...conv, terms: e.target.value.replace(/\D/g, '') })} /></Field>
+            : <div />}</div>
+        <Field label="Livraison imposée le"><input className="input" type="date" value={conv.promised} onChange={(e) => setConv({ ...conv, promised: e.target.value })} /></Field>
+        {conv.pay === 'account' && <p className="small muted">La commande part tout de suite en préparation ; rien n'est encaissé à la livraison ; la facture porte l'échéance et le n° du bon, puis la créance est suivie dans Factures (relances automatiques).</p>}
         {data.lines.some((l) => !l.product_id) && <label className="check"><input type="checkbox" checked={conv.free} onChange={(e) => setConv({ ...conv, free: e.target.checked })} /> Reprendre les lignes non rapprochées en articles libres (sans stock)</label>}
         <Btn kind="primary" size="xl" disabled={busy || !conv.zone || !conv.name} onClick={() => run(async () => {
-          const r = await rpc('lg_inbox_convert', { p_id: id, p_customer: { name: conv.name, phone: conv.phone, address: conv.address }, p_zone: conv.zone, p_free_lines: conv.free });
+          const r = await rpc('lg_inbox_convert', { p_id: id, p_customer: { name: conv.name, phone: conv.phone, address: conv.address }, p_zone: conv.zone, p_free_lines: conv.free,
+            p_payment_method: conv.pay, p_terms_days: conv.pay === 'account' && conv.terms !== '' ? Number(conv.terms) : undefined, p_promised_at: conv.promised || undefined });
           if (r.ok) { setConv(null); refresh(); }
           return r;
         }, { ok: 'Commande créée : elle part en préparation' })}>Créer la commande</Btn></div></Modal>}

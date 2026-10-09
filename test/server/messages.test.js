@@ -66,7 +66,7 @@ test('modèles : liste, modification, désactivation, aperçu', async () => {
   const env = makeEnv();
   const S = await setup(env);
   const list = await S.support.rpc('lg_templates_list');
-  assert.equal(list.length, 16);
+  assert.equal(list.length, 18);
   assert.equal(list[0].event_key, 'lg_cod_confirm');
   assert.equal(list[0].sample.entreprise, 'Express Dakar');
   assert.equal(await S.support.rpcError('lg_template_save', { p_event: 'lg_prepared', p_body_fr: 'court' }), 'message_too_short');

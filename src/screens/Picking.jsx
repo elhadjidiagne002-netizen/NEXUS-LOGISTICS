@@ -42,7 +42,7 @@ function Queue() {
                 {canWave && !t.locked && <input type="checkbox" aria-label="Ajouter à la vague" style={{ width: 22, height: 22, accentColor: 'var(--primary)' }}
                   checked={sel.includes(t.id)} onChange={(e) => setSel(e.target.checked ? [...sel, t.id] : sel.filter((x) => x !== t.id))} />}
                 <div style={{ flex: 1 }}><h3 style={{ margin: 0 }}>Commande {t.order_short} <span className="muted small">· {t.zone ?? 'zone ?'}</span></h3>
-                  <div className="small muted">{t.vendor_name} · {t.lines} ligne(s), {t.units} article(s) · {t.payment_method === 'cod' ? 'à la livraison' : 'payée'}</div>
+                  <div className="small muted">{t.vendor_name} · {t.lines} ligne(s), {t.units} article(s) · {t.payment_method === 'cod' ? 'à la livraison' : t.payment_terms_days != null ? 'à terme' : 'payée'}</div>
                   <div className={`small ${late ? '' : 'muted'}`} style={late ? { color: 'var(--bad)', fontWeight: 700 } : undefined}>
                     Départ limite {hhmm(t.cutoff_at)} {late ? '· EN RETARD' : ''}</div></div>
                 {t.locked ? <Badge>verrouillée · {t.picker_name}</Badge>

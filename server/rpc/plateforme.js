@@ -40,7 +40,7 @@ export default {
               (SELECT count(*) FROM invoices WHERE company_id = ?1) AS invoices,
               (SELECT count(*) FROM outbox WHERE company_id = ?1 AND status = 'failed' AND created_at >= ?3) AS messages_failed_7d,
               (SELECT count(*) FROM devices WHERE company_id = ?1 AND blocked = 1) AS devices_blocked`).bind(id, d30, d7),
-        ctx.db.prepare(`SELECT id, number, external_ref, status, payment_method, payment_status, buyer_name, delivery_zone, total_fcfa, created_at
+        ctx.db.prepare(`SELECT id, number, external_ref, status, payment_method, payment_status, payment_terms_days, buyer_name, delivery_zone, total_fcfa, created_at
             FROM orders WHERE company_id = ? ORDER BY created_at DESC LIMIT 20`).bind(id),
         ctx.db.prepare('SELECT id, months, amount_fcfa, method, ref, status, declared_at, decided_at, note FROM plan_payments WHERE company_id = ? ORDER BY declared_at DESC LIMIT 24').bind(id),
         ctx.db.prepare(`SELECT a.action, a.entity, a.created_at, u.name AS user FROM audit_log a LEFT JOIN users u ON u.id = a.user_id
@@ -134,7 +134,7 @@ export default {
     roles: 'platform', read: true,
     async handler(ctx, a) {
       const q = String(a.p_q ?? '').trim(); const st = a.p_status && ORDER_STATUSES.includes(a.p_status) ? a.p_status : null;
-      const r = await ctx.db.prepare(`SELECT o.id, o.number, o.external_ref, o.status, o.payment_method, o.payment_status, o.buyer_name, o.buyer_phone,
+      const r = await ctx.db.prepare(`SELECT o.id, o.number, o.external_ref, o.status, o.payment_method, o.payment_status, o.payment_terms_days, o.buyer_name, o.buyer_phone,
             o.delivery_zone, o.total_fcfa, o.created_at, o.delivered_at, c.id AS company_id, c.name AS company
           FROM orders o JOIN companies c ON c.id = o.company_id
           WHERE (? IS NULL OR o.company_id = ?) AND (? IS NULL OR o.status = ?)

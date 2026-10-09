@@ -7,6 +7,9 @@ import { VendorStatement } from '../components/statement.jsx';
 import { Icon, useRpc, useAction, useNav, Btn, Card, Badge, Empty, Loading, ErrorBox, PageHead, Modal, Field, formatF, dmy } from '../components/ui.jsx';
 
 const iso = (d) => d.toISOString().slice(0, 10);
+const MODE = { cod: 'livraison', prepaid: "d'avance", account: 'à terme', mobile: 'mobile', card: 'carte' };
+const STATUS = { paid: ['payée', 'ok'], refunded: ['avoir', 'bad'], due: ['à régler', 'todo'], overdue: ['en retard', 'bad'] };
+const VIA = [['transfer', 'Virement'], ['cheque', 'Chèque'], ['cash', 'Espèces'], ['mobile', 'Mobile money'], ['other', 'Autre']];
 const csv = (rows) => {
   if (!rows.length) return '';
   const cols = Object.keys(rows[0]);
@@ -47,8 +50,10 @@ export default function Billing({ invoiceId }) {
       <Card style={{ marginTop: 12 }}><div className="scroll-x"><table className="tbl"><thead><tr><th>Numéro</th><th>Date</th><th>Client</th><th>Commande</th><th>Mode</th><th className="num">TTC</th><th></th></tr></thead>
         <tbody>{data.map((i) => <tr key={i.id} style={{ cursor: 'pointer' }} onClick={() => go(`/factures/${i.id}`)}>
           <td className="mono">{i.number} {i.kind === 'credit_note' && <Badge kind="bad">avoir</Badge>}</td><td>{dmy(i.issued_at)}</td><td>{i.customer}</td>
-          <td className="mono">{i.order_short}</td><td>{{ cod: 'livraison', mobile: 'mobile', card: 'carte' }[i.payment_method] ?? i.payment_method}</td>
-          <td className="num">{formatF(i.ttc)}</td><td><Badge kind={i.status === 'paid' ? 'ok' : i.status === 'refunded' ? 'bad' : ''}>{i.status}</Badge></td></tr>)}</tbody></table></div></Card>}
+          <td className="mono">{i.order_short}</td><td>{MODE[i.payment_method] ?? i.payment_method}</td>
+          <td className="num">{formatF(i.ttc)}</td><td><Badge kind={STATUS[i.status]?.[1] ?? ''}>{STATUS[i.status]?.[0] ?? i.status}</Badge>
+            {i.due_at && i.status !== 'paid' && <div className="small muted">échéance {dmy(i.due_at)}</div>}</td></tr>)}</tbody></table></div></Card>}
+    {(has(me, 'accountant') || has(me, 'support')) && <Receivables canRecord={has(me, 'accountant')} />}
     {has(me, 'accountant') && <Payouts from={from} to={to} />}
     <Card kind="flat" style={{ marginTop: 12 }}><p className="small muted" style={{ margin: 0 }}>À trancher avec le comptable avant la première facture réelle (chapitre 11) :
       émetteur de la facture client (vendeur via NEXUS ou NEXUS), régime de TVA des vendeurs, calendrier de la facture électronique (DGID).</p></Card>
@@ -76,6 +81,10 @@ function Invoice({ id }) {
         <td className="num">{l.tva_rate} %</td><td className="num">{Number(l.total_ht).toFixed(2)}</td></tr>)}</tbody></table>
       <div className="right" style={{ marginTop: 10 }}><div>HT {formatF(inv.amount_ht)} · TVA {formatF(inv.tva)}</div><div className="big">TTC {formatF(inv.amount_ttc)}</div>
         <div className="small muted"><i>{m.amount_words}</i></div></div></Card>
+    {inv.settlement && <Card style={{ marginTop: 12 }} kind={inv.settlement.paid ? '' : 'todo'}><h3>Règlement (à terme, {m.payment_terms_days} jours)</h3>
+      {inv.settlement.paid ? <div>Réglée le {dmy(inv.settlement.paid_at)}{inv.settlement.ref ? ` · réf. ${inv.settlement.ref}` : ''}</div>
+        : <div className="row between"><span>À régler{inv.settlement.due_at ? ` avant le ${dmy(inv.settlement.due_at)}` : ''}{m.customer_ref ? ` · bon client n° ${m.customer_ref}` : ''}</span>
+          {has(me, 'accountant') && <RecordPayment orderId={inv.order_id} onDone={reload} />}</div>}</Card>}
     {inv.credits.length > 0 && <Card style={{ marginTop: 12 }}><h3>Avoirs liés</h3>{inv.credits.map((c) => <div key={c.number} className="line"><span className="mono grow">{c.number}</span>{formatF(c.ttc)}</div>)}</Card>}
     {credit && <CreditModal inv={inv} onClose={() => setCredit(false)} onDone={() => { setCredit(false); reload(); }} />}
   </>;
@@ -112,5 +121,50 @@ function Payouts({ from, to }) {
           <td className="num">{formatF(v.goods_fcfa)}</td><td className="num">{formatF(v.commission_fcfa)}</td><td className="num">{formatF(v.deductions_fcfa)}</td>
           <td className="num"><b>{formatF(v.net_payable_fcfa)}</b></td><td className="num">{formatF(v.pending_fcfa)}</td></tr>)}</tbody></table></div>}
     {open && <Modal title={`Relevé · ${open.vendor}`} onClose={() => setOpen(null)}><VendorStatement from={from} to={to} vendor={open.vendor_id} /></Modal>}
+  </Card>;
+}
+
+/** Règlement reçu d'une commande à terme (virement, chèque…) : date, mode, référence. */
+function RecordPayment({ orderId, onDone }) {
+  const [open, setOpen] = useState(false);
+  const [f, setF] = useState({ via: 'transfer', ref: '', day: iso(new Date()) });
+  const [run, busy] = useAction();
+  if (!open) return <Btn kind="ok" size="sm" onClick={() => setOpen(true)}>Enregistrer le règlement</Btn>;
+  return <Modal title="Règlement reçu" onClose={() => setOpen(false)}><div className="stack">
+    <Field label="Mode"><select className="input" value={f.via} onChange={(e) => setF({ ...f, via: e.target.value })}>{VIA.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></Field>
+    <Field label="Référence (n° de virement, de chèque…)"><input className="input" value={f.ref} onChange={(e) => setF({ ...f, ref: e.target.value })} /></Field>
+    <Field label="Reçu le"><input className="input" type="date" value={f.day} max={iso(new Date())} onChange={(e) => setF({ ...f, day: e.target.value })} /></Field>
+    <Btn kind="primary" disabled={busy} onClick={() => run(async () => {
+      const r = await rpc('lg_order_record_payment', { p_order: orderId, p_via: f.via, p_ref: f.ref || null, p_paid_on: f.day });
+      setOpen(false); onDone?.(); return r;
+    }, { ok: 'Règlement enregistré' })}>Enregistrer</Btn></div></Modal>;
+}
+
+/** Créances à terme : balance âgée, clients qui doivent le plus, factures à régler ou en retard. */
+function Receivables({ canRecord }) {
+  const [state, setState] = useState('open');
+  const { data, error, loading, reload } = useRpc('lg_receivables', { p_state: state });
+  const { go } = useNav();
+  const nb = (data?.list ?? []).length;
+  return <Card style={{ marginTop: 12 }}>
+    <div className="row between"><h3 style={{ margin: 0 }}>Créances à terme</h3>
+      <select className="input" style={{ width: 'auto' }} value={state} onChange={(e) => setState(e.target.value)}>
+        <option value="open">À recevoir</option><option value="overdue">En retard</option><option value="paid">Réglées</option></select></div>
+    <ErrorBox error={error} />
+    {loading && !data ? <Loading /> : !data ? null : <>
+      {state !== 'paid' && <div className="grid cols-3" style={{ marginTop: 10 }}>
+        <div><div className="small muted">À recevoir</div><div className="big">{formatF(data.total_open_fcfa)}</div></div>
+        <div><div className="small muted">Dont en retard</div><div className="big" style={{ color: data.overdue_fcfa ? 'var(--bad)' : undefined }}>{formatF(data.overdue_fcfa)}</div></div>
+        <div className="small">Pas échu {formatF(data.aging.not_due)}<br />Retard ≤ 30 j {formatF(data.aging.d0_30)}<br />31–60 j {formatF(data.aging.d31_60)} · + 60 j {formatF(data.aging.d60_plus)}</div></div>}
+      {state !== 'paid' && data.customers.length > 1 && <p className="small muted">{data.customers.slice(0, 5).map((c) => `${c.customer} : ${formatF(c.owed_fcfa)}${c.overdue_fcfa ? ` (dont ${formatF(c.overdue_fcfa)} en retard)` : ''}`).join(' · ')}</p>}
+      {!nb ? <Empty>{state === 'paid' ? 'Aucun règlement enregistré.' : 'Aucune créance.'}</Empty> :
+        <div className="scroll-x"><table className="tbl"><thead><tr><th>Commande</th><th>Client</th><th>Bon client</th><th>Facture</th><th>Échéance</th><th className="num">Montant</th><th></th></tr></thead>
+          <tbody>{data.list.map((r) => <tr key={r.order_id}>
+            <td className="mono">{r.number}</td><td>{r.customer}</td><td className="mono">{r.customer_ref ?? ''}</td><td className="mono">{r.invoice ?? <span className="muted">à livrer</span>}</td>
+            <td>{r.paid ? `réglée le ${dmy(r.paid_at)}` : r.due_at ? <>{dmy(r.due_at)} {r.days_late != null ? <Badge kind="bad">{r.days_late} j de retard</Badge> : <span className="small muted">dans {r.days_left} j</span>}</> : <span className="muted">{r.terms_days} j après livraison</span>}
+              {r.reminded && !r.paid && <div className="small muted">relancé</div>}</td>
+            <td className="num">{formatF(r.owed_fcfa)}</td>
+            <td>{!r.paid && canRecord && <RecordPayment orderId={r.order_id} onDone={reload} />}{r.paid && r.payment_ref ? <span className="small">réf. {r.payment_ref}</span> : null}</td></tr>)}</tbody></table></div>}
+    </>}
   </Card>;
 }

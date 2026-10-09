@@ -50,7 +50,8 @@ function OrderDetail({ id, onClose }) {
       <tr><td>Livraison ({o.service})</td><td className="num">{formatF(o.delivery_fee_fcfa)}</td></tr>
       {o.insurance_fee_fcfa > 0 && <tr><td>Assurance (valeur {formatF(o.insured_value_fcfa)})</td><td className="num">{formatF(o.insurance_fee_fcfa)}</td></tr>}
       <tr><td><b>Total</b></td><td className="num"><b>{formatF(o.total_fcfa)}</b></td></tr></tbody></table>
-    <div className={`flash ${o.amount_due_fcfa ? 'todo' : 'ok'}`}>{o.amount_due_fcfa ? `À encaisser à la livraison : ${formatF(o.amount_due_fcfa)}` : 'Payée d\'avance : rien à encaisser.'}
+    <div className={`flash ${o.amount_due_fcfa ? 'todo' : 'ok'}`}>{o.amount_due_fcfa ? `À encaisser à la livraison : ${formatF(o.amount_due_fcfa)}` : o.payment_method === 'account' ? `À terme : rien à encaisser à la livraison, facture payable à ${o.payment_terms_days} jours${o.due_at ? ` (échéance ${dmy(o.due_at)})` : ''}${o.paid ? ' · réglée' : ''}.`
+      : 'Payée d\'avance : rien à encaisser.'}
       {o.payment_method === 'cod' && <span className="small">{o.cod_confirmed_at ? ` · confirmée le ${dmy(o.cod_confirmed_at)}` : ' · pas encore confirmée par le client'}</span>}</div>
     {o.note && <p className="small">Note : {o.note}</p>}
     <div className="row"><a className="btn sm" href={o.tracking_url} target="_blank" rel="noreferrer">Page de suivi ↗</a>
@@ -71,7 +72,7 @@ function NewOrder({ onClose, onDone }) {
   const pricing = useRpc('lg_pricing', {});
   const products = useRpc('lg_products_list', {});
   const [c, setC] = useState({ name: '', phone: '', address: '', landmark: '' });
-  const [f, setF] = useState({ zone: '', service: 'standard', payment_method: 'cod', fee: '', declared: '', note: '', vendor_name: '' });
+  const [f, setF] = useState({ zone: '', service: 'standard', payment_method: 'cod', terms: '30', promised: '', fee: '', declared: '', note: '', vendor_name: '' });
   const [lines, setLines] = useState([emptyLine()]);
   const [quote, setQuote] = useState(null);
   const [event] = useState(newEvent);
@@ -110,7 +111,9 @@ function NewOrder({ onClose, onDone }) {
     </div>)}
     <Btn size="sm" kind="ghost" onClick={() => setLines([...lines, emptyLine()])}>＋ Article</Btn>
     <div className="grid cols-2">
-      <Field label="Paiement"><Chips options={[['cod', 'À la livraison'], ['prepaid', 'Payé d\'avance']]} value={f.payment_method} onChange={(v) => setF({ ...f, payment_method: v })} /></Field>
+      <Field label="Paiement"><Chips options={[['cod', 'À la livraison'], ['prepaid', 'Payé d\'avance'], ['account', 'À terme (sur facture)']]} value={f.payment_method} onChange={(v) => setF({ ...f, payment_method: v })} /></Field>
+      {f.payment_method === 'account' && <Field label="Délai de paiement (jours après livraison)"><input className="input" inputMode="numeric" value={f.terms} onChange={(e) => setF({ ...f, terms: e.target.value.replace(/\D/g, '') })} /></Field>}
+      <Field label="Livraison imposée le (facultatif)"><input className="input" type="date" value={f.promised} onChange={(e) => setF({ ...f, promised: e.target.value })} /></Field>
       <Field label="Service"><Chips options={[['standard', 'Standard'], ['express', 'Express'], ['programme', 'Programmé']]} value={f.service} onChange={(v) => { setF({ ...f, service: v }); setQuote(null); }} /></Field>
       <Field label="Frais de livraison (vide = grille)"><input className="input" inputMode="numeric" value={f.fee} onChange={(e) => setF({ ...f, fee: e.target.value.replace(/\D/g, '') })} /></Field>
       <Field label="Valeur assurée (facultatif, F)"><input className="input" inputMode="numeric" value={f.declared} onChange={(e) => { setF({ ...f, declared: e.target.value.replace(/\D/g, '') }); setQuote(null); }} /></Field>
@@ -121,7 +124,8 @@ function NewOrder({ onClose, onDone }) {
         : <span style={{ color: 'var(--bad)' }}> · {errText(quote.error)}</span>)}</span></div>
     <Btn kind="primary" size="xl" disabled={busy || !items.length || !f.zone} onClick={() => run(async () => {
       const r = await rpc('lg_order_create', { p_event: event, p_customer: c, p_zone: f.zone, p_items: items, p_payment_method: f.payment_method, p_service: f.service,
-        p_delivery_fee_fcfa: f.fee === '' ? null : Number(f.fee), p_declared_value_fcfa: f.declared ? Number(f.declared) : null, p_note: f.note || null, p_vendor_name: f.vendor_name || null });
+        p_delivery_fee_fcfa: f.fee === '' ? null : Number(f.fee), p_declared_value_fcfa: f.declared ? Number(f.declared) : null, p_note: f.note || null, p_vendor_name: f.vendor_name || null,
+        p_payment_terms_days: f.payment_method === 'account' && f.terms !== '' ? Number(f.terms) : null, p_promised_at: f.promised || null });
       onDone(r); return r;
     }, { ok: 'Commande enregistrée' })}>Enregistrer la commande</Btn></div></Modal>;
 }

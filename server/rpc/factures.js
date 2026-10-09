@@ -6,8 +6,11 @@
 // DANS LE MÊME LOT que la facture (un lot annulé n'use aucun numéro).
 import { fail, audit, int, text, uuid, parseJson, guard, runBatch } from './core.js';
 import { causesOf } from './retours.js';
+import { payMode } from './commandes.js';
 
 const r2 = (x) => Math.round(x * 100) / 100;
+/** « bon:23716 » ou « auchan:23716 » (référence posée par la collecte) → « 23716 » ; référence boutique gardée telle quelle. */
+const customerRef = (ref) => (ref ? String(ref).replace(/^[a-z0-9._-]{1,40}:/i, '') : null);
 const ht = (ttc, rate) => r2(ttc / (1 + rate / 100));
 
 /** Montant en lettres (lg_words_fr), pour la mention obligatoire de la facture. */
@@ -105,8 +108,12 @@ export async function issueInvoice(ctx, orderId) {
   const totalHt = r2(lines.reduce((s, l) => s + r2(l.unit_price_ht * l.quantity), 0));
   const commission = o.vendor_id ? Math.round((prod * Number(cfg.commission_pct ?? 0)) / 100) : 0;
   const year = ctx.now.slice(0, 4); const key = `FAC-${year}`; const id = uuid();
-  const meta = { ...parties(ctx, o), currency: 'XOF', kind: 'invoice', order_short: String(o.number), payment_method: o.payment_method,
-    payment_ref: cc.results[0]?.ref ?? null, amount_words: `${capital(wordsFr(ttc))} francs CFA`, discount_fcfa: disc };
+  // à terme : échéance (fixée à la livraison) et référence du bon du client, exigée par les enseignes sur la facture
+  const terms = o.payment_terms_days;
+  const due = terms == null ? null : o.due_at ?? new Date(Date.parse(o.delivered_at ?? ctx.now) + terms * 86400000).toISOString();
+  const meta = { ...parties(ctx, o), currency: 'XOF', kind: 'invoice', order_short: String(o.number), payment_method: payMode(o),
+    payment_ref: cc.results[0]?.ref ?? null, amount_words: `${capital(wordsFr(ttc))} francs CFA`, discount_fcfa: disc,
+    payment_terms_days: terms ?? null, due_at: due, customer_ref: customerRef(o.external_ref) };
   try {
     const res = await ctx.db.batch([
       counterStmt(ctx, key),
@@ -201,12 +208,16 @@ export async function creditPackage(ctx, packageId, reason) {
 
 /** Document complet (lg_invoice_doc). */
 export async function invoiceDoc(ctx, inv) {
-  const [lines, credits] = await ctx.db.batch([
+  const [lines, credits, ord] = await ctx.db.batch([
     ctx.db.prepare('SELECT position, kind, order_item_id, label, quantity, unit_price_ht, tva_rate, total_ht FROM invoice_lines WHERE invoice_id = ? ORDER BY position').bind(inv.id),
     ctx.db.prepare('SELECT invoice_number AS number, amount_ttc AS ttc, issued_at AS at FROM invoices WHERE credit_of = ? ORDER BY issued_at').bind(inv.id),
+    ctx.db.prepare('SELECT payment_status, paid_at, due_at, payment_terms_days, payment_ref, payment_via FROM orders WHERE id = ? AND company_id = ?').bind(inv.order_id, inv.company_id),
   ]);
+  const o = ord.results[0];
+  // état du règlement au moment de la lecture (la facture elle-même ne change jamais)
+  const settlement = o?.payment_terms_days != null ? { paid: o.payment_status === 'paid', paid_at: o.paid_at, due_at: o.due_at, ref: o.payment_ref, via: o.payment_via } : null;
   return { ...inv, metadata: parseJson(inv.metadata, {}), lines: lines.results.map((l) => ({ ...l, total_ttc: Math.round(l.total_ht * (1 + l.tva_rate / 100)) })),
-    credits: credits.results };
+    credits: credits.results, settlement };
 }
 
 const isVendor = (ctx) => ctx.member === 'vendor';
@@ -274,7 +285,8 @@ export default {
       if (!staff && !isVendor(ctx)) fail('forbidden', 403);
       const q = text(a.p_q, 60);
       const r = await ctx.db.prepare(
-        `SELECT i.id, i.invoice_number, i.credit_of, i.amount_ttc, i.amount_ht, i.tva, i.status, i.issued_at, i.metadata, o.number
+        `SELECT i.id, i.invoice_number, i.credit_of, i.amount_ttc, i.amount_ht, i.tva, i.status, i.issued_at, i.metadata, o.number,
+                o.payment_terms_days, o.payment_status AS order_paid, o.due_at
            FROM invoices i JOIN orders o ON o.id = i.order_id
           WHERE i.company_id = ?1 AND (?2 IS NULL OR i.issued_at >= ?2) AND (?3 IS NULL OR i.issued_at < ?3)
             AND (?4 IS NULL OR i.invoice_number LIKE '%' || ?4 || '%' OR json_extract(i.metadata, '$.customer.name') LIKE '%' || ?4 || '%')
@@ -283,8 +295,11 @@ export default {
       ).bind(ctx.company.id, dayStart(a.p_from), dayAfter(a.p_to), q, staff ? null : ctx.user.id).all();
       return r.results.map((i) => {
         const m = parseJson(i.metadata, {});
-        return { id: i.id, number: i.invoice_number, kind: i.credit_of ? 'credit_note' : 'invoice', order_short: String(i.number), customer: m.customer?.name ?? null,
-          seller: m.seller?.name ?? null, ttc: i.amount_ttc, ht: i.amount_ht, tva: i.tva, status: i.status, issued_at: i.issued_at, payment_method: m.payment_method ?? null,
+        // facture à terme pas encore réglée : « à régler » (ou « en retard » passé l'échéance), jamais « payée »
+        const open = !i.credit_of && i.payment_terms_days != null && i.order_paid !== 'paid';
+        const status = open ? (i.due_at && i.due_at < ctx.now ? 'overdue' : 'due') : i.status;
+        return { due_at: i.due_at ?? m.due_at ?? null, id: i.id, number: i.invoice_number, kind: i.credit_of ? 'credit_note' : 'invoice', order_short: String(i.number), customer: m.customer?.name ?? null,
+          seller: m.seller?.name ?? null, ttc: i.amount_ttc, ht: i.amount_ht, tva: i.tva, status, issued_at: i.issued_at, payment_method: m.payment_method ?? null,
           sent_whatsapp_at: null };
       });
     },

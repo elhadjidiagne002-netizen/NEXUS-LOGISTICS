@@ -246,7 +246,7 @@ function OrdersTable({ list, openCompany }) {
       {openCompany && <td><button className="linkish" style={{ background: 'none', border: 0, padding: 0, cursor: 'pointer' }} onClick={() => openCompany(o.company_id)}>{o.company}</button></td>}
       <td>{o.buyer_name}<div className="small muted">{o.buyer_phone}</div></td><td>{o.delivery_zone}</td>
       <td><Badge kind={o.status === 'delivered' ? 'ok' : o.status === 'cancelled' ? 'bad' : ''}>{STATUS[o.status] ?? o.status}</Badge></td>
-      <td className="small">{o.payment_method === 'cod' ? 'à la livraison' : 'payée en ligne'} · {o.payment_status === 'paid' ? 'payée' : 'à encaisser'}</td>
+      <td className="small">{o.payment_terms_days != null ? `à terme (${o.payment_terms_days} j)` : o.payment_method === 'cod' ? 'à la livraison' : 'payée en ligne'} · {o.payment_status === 'paid' ? 'payée' : 'à encaisser'}</td>
       <td className="num">{formatF(o.total_fcfa)}</td><td className="small">{dmy(o.created_at)}</td></tr>)}</tbody></table></div></Card>;
 }
 

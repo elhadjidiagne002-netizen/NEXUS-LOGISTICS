@@ -16,7 +16,7 @@ SUPERMARCHE TEST ALMADIES
 Montant achat 66600 XOF`;
 
 const IA = { document_type: 'commande', customer: { name: 'Enseigne Test', store: 'SUPERMARCHE TEST ALMADIES' }, order_number: '123456',
-  order_date: '07/10/2026', delivery_date: '2026-10-10', delivery_place: 'SUPERMARCHE TEST ALMADIES', total_ht: 66600, confidence: 0.92,
+  order_date: '07/10/2026', delivery_date: '2026-10-10', delivery_place: 'SUPERMARCHE TEST ALMADIES', total_ht: 66600, confidence: 0.92, payment_terms_days: '15 JOURS',
   lines: [{ ref: '1234567', ean: '6111000000017', label: '500G SURGELE ATTIEKE', cases: 10, units_per_case: 12, unit_price: 450 },
     { ref: '1234568', ean: '6111000000024', label: 'HUILE 1 L', cases: 2, units_per_case: 6, unit_price: 1100 }] };
 
@@ -62,6 +62,7 @@ test('dépôt d\'un bon : lu, rapproché, correction apprise, réutilisée au bo
   assert.equal(cv.ok, true);
   const o = await S.support.rpc('lg_order_detail', { p_order: cv.order_id });
   assert.deepEqual(o.items.map((i) => [i.product_name, i.quantity]).sort(), [['Attiéké Dabou 500 g', 120], ['Huile 1 L', 12]]);
+  assert.deepEqual([o.payment_method, o.payment_terms_days, o.amount_due_fcfa], ['account', 15, 0], 'bon « 15 JOURS » : commande à terme');
   assert.equal((await S.support.rpc('lg_inbox_convert', { p_id: up.id, p_zone: 'Yoff' })).error, 'already_converted');
   const cv2 = await S.support.rpc('lg_inbox_convert', { p_id: up2.id, p_customer: { name: 'Supermarché', phone: '338200000' }, p_zone: 'Yoff' });
   assert.equal(cv2.duplicate, true, 'même n° de bon : la commande existante est rendue');

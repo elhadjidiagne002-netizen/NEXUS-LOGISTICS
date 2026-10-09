@@ -48,6 +48,7 @@ export function parseProductsCsv(textIn) {
 }
 
 /** Lecture du CSV de commandes → une commande par référence (plusieurs lignes = plusieurs articles). */
+const ON_ACCOUNT = /terme|jours?\b|facture|compte/;
 export function parseOrdersCsv(textIn) {
   const { head, rows } = parseCsvRows(textIn);
   const get = (r, k) => (r[head.indexOf(k)] ?? '').trim();
@@ -59,7 +60,10 @@ export function parseOrdersCsv(textIn) {
     if (!o) {
       const pay = get(r, 'paiement').toLowerCase();
       o = { external_ref: get(r, 'reference') || null, customer: { name: get(r, 'client'), phone: get(r, 'telephone'), address: get(r, 'adresse') || null, landmark: get(r, 'repere') || null },
-        zone: get(r, 'zone'), items: [], payment_method: /pay|avance|prepa|wave|orange|om/.test(pay) && !/livraison/.test(pay) ? 'prepaid' : 'cod',
+        zone: get(r, 'zone'), items: [],
+        // « à terme », « 30 jours », « facture » : à terme (le nombre de jours, s'il y en a un, est le délai)
+        payment_method: ON_ACCOUNT.test(pay) ? 'account' : /pay|avance|prepa|wave|orange|om/.test(pay) && !/livraison/.test(pay) ? 'prepaid' : 'cod',
+        payment_terms_days: ON_ACCOUNT.test(pay) && /\d+/.test(pay) ? Number(pay.match(/\d+/)[0]) : undefined,
         delivery_fee_fcfa: nb(get(r, 'frais_livraison')), note: get(r, 'note') || null, _line: i + 2 };
       orders.set(ref, o);
     }

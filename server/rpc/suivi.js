@@ -3,7 +3,7 @@
 // Ces fonctions sont VOULUES publiques (rôle 'public') : le jeton (18 octets aléatoires) est la seule clé ;
 // elles ne renvoient que le nécessaire et toutes leurs requêtes portent l'entreprise de la commande trouvée.
 import { text, num, uuid, parseJson, distanceM } from './core.js';
-import { confirmCod, cancelOrder, amountDue, orderShort } from './commandes.js';
+import { confirmCod, cancelOrder, amountDue, orderShort, payMode } from './commandes.js';
 import { zoneAt } from './tarifs.js';
 import { FAILURE_REASONS } from './terrain.js';
 import { invoiceDoc } from './factures.js';
@@ -73,7 +73,7 @@ export default {
         company: { name: o.company_name },
         order: {
           short: orderShort(o.id), number: o.number, status: o.status, vendor: o.vendor_name ?? o.company_name, zone: o.delivery_zone,
-          landmark: o.landmark, created_at: o.created_at, payment_method: o.payment_method, paid: o.payment_status === 'paid',
+          landmark: o.landmark, created_at: o.created_at, payment_method: payMode(o), paid: o.payment_status === 'paid', due_at: o.due_at ?? null,
           promised_at: o.promised_at, has_position: o.delivery_lat != null, first_name: String(o.buyer_name ?? '').split(' ')[0],
         },
         amount_due_fcfa: amountDue(o),

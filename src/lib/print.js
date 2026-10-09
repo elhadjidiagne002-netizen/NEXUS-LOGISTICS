@@ -5,6 +5,7 @@ import { formatF } from './algo.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const dt = (d) => d ? new Date(d).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Dakar' }) : '';
+const day10 = (d) => (d ? new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Africa/Dakar' }) : '');
 
 function open(title, css, body) {
   const w = window.open('', '_blank', 'width=820,height=900');
@@ -76,7 +77,8 @@ export function printInvoice(inv) {
    <div class="tot"><div><span>Total HT</span><b>${formatF(inv.amount_ht)}</b></div><div><span>TVA</span><b>${formatF(inv.tva)}</b></div>
     <div class="g"><span>Total TTC</span><span>${formatF(inv.amount_ttc)}</span></div></div>
    <p><i>${esc(m.amount_words ?? '')}</i></p>
-   <p>Paiement : ${esc({ cod: 'à la livraison', prepaid: "payée d'avance", mobile: 'mobile (PayTech)', card: 'carte' }[m.payment_method] ?? m.payment_method ?? '')}${m.payment_ref ? ' · réf. ' + esc(m.payment_ref) : ''}</p>
+   <p>Paiement : ${esc({ cod: 'à la livraison', prepaid: "payée d'avance", account: `à terme, ${m.payment_terms_days ?? ''} jours`, mobile: 'mobile (PayTech)', card: 'carte' }[m.payment_method] ?? m.payment_method ?? '')}${m.payment_ref ? ' · réf. ' + esc(m.payment_ref) : ''}</p>
+   ${m.payment_method === 'account' && !credit ? `<p><b>${inv.settlement?.paid ? `Réglée le ${day10(inv.settlement.paid_at)}` : `À régler avant le ${day10(m.due_at)}`}</b>${m.customer_ref ? ` · Votre bon de commande n° ${esc(m.customer_ref)}` : ''}</p>` : ''}
    <div class="foot">Document non modifiable. Toute correction fait l'objet d'un avoir numéroté. Montants en francs CFA.</div>`);
 }
 

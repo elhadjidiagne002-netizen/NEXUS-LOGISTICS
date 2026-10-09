@@ -80,6 +80,11 @@ Plan et état : **`ROADMAP.md`**. Historique : `JOURNAL.md`.
    (`json_group_array`, `batch`) plutôt qu'en boucle. D1 limite à 100 paramètres liés par requête.
 9. **Jamais `502`** comme code d'erreur (Cloudflare remplace le corps) : `500`.
 10. Dates en texte ISO UTC (`ctx.now`) ; affichage à l'heure de Dakar côté interface.
+11. **Ne jamais reconstruire une table parente** (CREATE … _new / DROP / RENAME pour changer un CHECK) : le DROP
+    déclenche les `ON DELETE CASCADE` des tables filles, même avec `defer_foreign_keys` (vérifié : toutes les
+    `order_items` effacées). Ajouter une colonne (`ALTER TABLE … ADD COLUMN`) à la place. Exemple : le paiement
+    à terme est stocké `payment_method = 'prepaid'` + `payment_terms_days` non nul ; toujours lire le mode par
+    `payMode(o)` (`server/rpc/commandes.js`), jamais `o.payment_method` seul pour l'afficher ou l'exposer.
 
 ### Tests et aperçu
 - `npm run test:server` : tests du portage (D1 imitée sur `node:sqlite`, `test/helpers/d1-mock.js`, aussi

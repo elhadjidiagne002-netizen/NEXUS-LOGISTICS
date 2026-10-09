@@ -25,11 +25,13 @@ export const DEFAULT_TEMPLATES = [
   ['lg_vendor_prep_soon', 'Vendeur : commande à préparer bientôt', 'Bonjour {vendeur}, la commande {commande} doit être prête avant {heure} (votre engagement : {delai} h). Pensez à la préparer et à la remettre au livreur.'],
   ['lg_vendor_prep_late', 'Vendeur : commande en retard', "Bonjour {vendeur}, la commande {commande} devait être prête à {heure}. Le client attend : préparez-la dès que possible ou signalez une rupture dans l'application."],
   ['lg_incident_proposal', "Proposition d'indemnisation", 'Bonjour {prenom}, suite au problème sur votre commande {commande}, nous vous proposons : {resolution}{indemnite}. Acceptez ou refusez ici : {lien}'],
+  ['lg_invoice_due_soon', 'Échéance proche (facture à terme)', 'Bonjour {prenom}, la facture {facture} ({montant} F, commande {commande}) arrive à échéance le {echeance}. Merci de prévoir son règlement. Détail : {lien}'],
+  ['lg_invoice_overdue', "Relance d'impayé (facture à terme)", "Bonjour {prenom}, sauf erreur de notre part, la facture {facture} ({montant} F, commande {commande}), échue le {echeance}, reste à régler. Si le paiement est déjà parti, merci de nous en donner la référence. Détail : {lien}"],
   ['lg_reinforcement', 'Appel de renfort (chauffeurs)', "Bonjour {prenom}, {entreprise} a besoin de livreurs en renfort le {jour}{zones}. Êtes-vous disponible ? Répondez dans l'application (Ma journée)."],
 ].map(([event_key, label, body_fr], i) => ({ event_key, label, body_fr, body_wo: null, active: true, position: i + 1 }));
 
 const SAMPLE = { prenom: 'Awa', commande: '1024', vendeur: 'Boutique Ndèye', montant: 12500, lien: 'https://logistique.nexusmarket.sn/suivi/…', livreur: 'Moussa',
-  heure: '14h30', code: '4812', minutes: 10, motif: 'client absent', produit: 'Huile 1 L', facture: 'FAC-2026-000001', colis: 2, entreprise: 'Express Dakar' };
+  heure: '14h30', code: '4812', echeance: '24/10/2026', minutes: 10, motif: 'client absent', produit: 'Huile 1 L', facture: 'FAC-2026-000001', colis: 2, entreprise: 'Express Dakar' };
 
 /** Modèles de l'entreprise (défauts + modifications), gardés le temps de la requête. */
 export function loadTemplates(ctx) {

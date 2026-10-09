@@ -25,6 +25,18 @@ export const trackingUrl = (ctx, token) => `${new URL(ctx.request.url).origin}/s
  * Montant à encaisser à la livraison (équivalent de lg_order_due_fcfa) : 0 si payé d'avance.
  * Le même chiffre pour le chauffeur, la page de suivi et la facture. Les ruptures (C3) le réduiront.
  */
+/**
+ * Mode de paiement exposé : 'cod' | 'prepaid' | 'account' (à terme, sur facture). Une commande à terme est stockée
+ * payment_method = 'prepaid' + payment_terms_days non nul (cf. migrations/0016 : le CHECK n'est pas modifiable sans
+ * reconstruire orders, ce qui effacerait order_items par cascade).
+ */
+export const payMode = (o) => (o?.payment_terms_days != null ? 'account' : o?.payment_method);
+const TERMS_MAX = 365;
+/** Délai de paiement (jours) d'une commande à terme : celui demandé, sinon celui du client, sinon celui de l'entreprise. */
+const termsOf = (input, customerTerms, cfg) => {
+  const t = int(input.payment_terms_days) ?? customerTerms ?? int(cfg.payment_terms_days) ?? 30;
+  return t >= 0 && t <= TERMS_MAX ? t : null;
+};
 export const amountDue = (o) => {
   if (o.payment_method !== 'cod' || o.payment_status === 'paid') return 0;
   // ruptures exclues, remise au prorata de ce qui reste (lg_order_due_fcfa)
@@ -52,14 +64,16 @@ async function lookups(db, cid, inputs) {
   q('SELECT id, sku, name, price_fcfa, weight_g FROM products WHERE company_id = ? AND id IN ($)', ids);
   q('SELECT id, sku, name, price_fcfa, weight_g FROM products WHERE company_id = ? AND sku IN ($)', skus);
   q('SELECT phone_key FROM banned_numbers WHERE company_id = ? AND phone_key IN ($)', keys);
+  q('SELECT phone_key, payment_terms_days FROM customers WHERE company_id = ? AND payment_terms_days IS NOT NULL AND phone_key IN ($)', keys);
   const res = stmts.length ? await db.batch(stmts.map((s) => s[1])) : [];
-  const out = { refs: new Map(), byId: new Map(), bySku: new Map(), banned: new Set() };
+  const out = { refs: new Map(), byId: new Map(), bySku: new Map(), banned: new Set(), terms: new Map() };
   res.forEach((r, i) => {
     const sql = stmts[i][0];
     for (const row of r.results) {
       if (sql.includes('external_ref IN')) out.refs.set(row.external_ref, row);
       else if (sql.includes('AND id IN')) out.byId.set(row.id, row);
       else if (sql.includes('sku IN')) out.bySku.set(row.sku, row);
+      else if (sql.includes('payment_terms_days')) out.terms.set(row.phone_key, row.payment_terms_days);
       else out.banned.add(row.phone_key);
     }
   });
@@ -101,8 +115,12 @@ function buildOrder(ctx, pricing, look, input, source) {
   if (!zone.served) return { error: 'zone_not_served' };
   const service = input.service || 'standard';
   if (!SERVICES.includes(service)) return { error: 'invalid_service' };
-  const method = input.payment_method === 'prepaid' ? 'prepaid' : input.payment_method == null || input.payment_method === 'cod' ? 'cod' : null;
+  // client « en compte » : à terme par défaut (sauf mode demandé explicitement)
+  const pm = input.payment_method == null || input.payment_method === '' ? (look.terms.has(key) ? 'account' : 'cod') : input.payment_method;
+  const method = ['cod', 'prepaid', 'account'].includes(pm) ? pm : null;
   if (!method) return { error: 'invalid_payment' };
+  const terms = method === 'account' ? termsOf(input, look.terms.get(key), cfg) : null;
+  if (method === 'account' && terms == null) return { error: 'invalid_terms' };
   const subtotal = items.reduce((s, x) => s + x.qty * x.price, 0);
   const discount = int(input.discount_fcfa) ?? 0;
   if (discount < 0 || discount > subtotal) return { error: 'invalid_amount' };
@@ -122,38 +140,51 @@ function buildOrder(ctx, pricing, look, input, source) {
     id: uuid(), token: randomToken(18), ref: text(input.external_ref, 80), source, method, name, phone, key,
     email: text(c.email, 120), address: text(c.address, 200), landmark: text(c.landmark, 200), lat, lng,
     zone: zone.name, vendor, hub: hub?.id ?? null, service, weight, subtotal, discount, fee, declared: declared > 0 ? declared : null,
-    insurance, total: subtotal - discount + fee + insurance, promised: q.ok ? q.promised_at : null, note: text(input.note, 500), items,
+    insurance, total: subtotal - discount + fee + insurance, promised: promisedOf(input.promised_at, ctx.now) ?? (q.ok ? q.promised_at : null), note: text(input.note, 500), items,
+    terms, stored: method === 'account' ? 'prepaid' : method,
   };
+}
+
+/** Date de livraison imposée (bon d'enseigne « date de livraison impérative ») : AAAA-MM-JJ ou ISO, jamais dans le passé. */
+function promisedOf(v, now) {
+  const s = text(v, 40);
+  if (!s) return null;
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(s) ? `${s}T18:00:00.000Z` : s;
+  const t = Date.parse(d);
+  if (!Number.isFinite(t) || t < Date.parse(now) - 3600000 || t > Date.parse(now) + 366 * 86400000) return null;
+  return new Date(t).toISOString();
 }
 
 function orderStatements(ctx, o) {
   const db = ctx.db; const cid = ctx.company.id; const now = ctx.now; const paid = o.method === 'prepaid';
+  const release = paid || o.method === 'account';   // à terme : en préparation tout de suite, rien à attendre
   return [
     db.prepare("INSERT INTO counters (company_id, key, n) VALUES (?, 'commande', 1) ON CONFLICT (company_id, key) DO UPDATE SET n = n + 1").bind(cid),
     db.prepare(
-      `INSERT INTO customers (id, company_id, name, phone, phone_key, address, landmark, lat, lng, zone, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO customers (id, company_id, name, phone, phone_key, address, landmark, lat, lng, zone, payment_terms_days, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (company_id, phone_key) DO UPDATE SET name = excluded.name, phone = excluded.phone,
+         payment_terms_days = coalesce(excluded.payment_terms_days, customers.payment_terms_days),
          address = coalesce(excluded.address, customers.address), landmark = coalesce(excluded.landmark, customers.landmark),
          lat = coalesce(excluded.lat, customers.lat), lng = coalesce(excluded.lng, customers.lng), zone = excluded.zone, updated_at = excluded.updated_at`,
-    ).bind(uuid(), cid, o.name, o.phone, o.key, o.address, o.landmark, o.lat, o.lng, o.zone, now, now),
+    ).bind(uuid(), cid, o.name, o.phone, o.key, o.address, o.landmark, o.lat, o.lng, o.zone, o.terms, now, now),
     // numéro sans trou : lu dans le compteur incrémenté par l'instruction précédente du MÊME lot (atomique)
     db.prepare(
       `INSERT INTO orders (id, company_id, number, external_ref, source, payment_method, payment_status, paid_at, customer_id,
          buyer_name, buyer_phone, buyer_email, buyer_address, landmark, delivery_lat, delivery_lng, delivery_zone, vendor_id, vendor_name,
          hub_id, service, weight_g, subtotal_fcfa, discount_fcfa, delivery_fee_fcfa, insured_value_fcfa, insurance_fee_fcfa, total_fcfa,
-         promised_at, tracking_token, note, created_by, created_at, updated_at)
+         promised_at, tracking_token, note, created_by, created_at, updated_at, payment_terms_days)
        VALUES (?, ?, (SELECT n FROM counters WHERE company_id = ? AND key = 'commande'), ?, ?, ?, ?, ?,
          (SELECT id FROM customers WHERE company_id = ? AND phone_key = ?),
-         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING number`,
-    ).bind(o.id, cid, cid, o.ref, o.source, o.method, paid ? 'paid' : 'pending', paid ? now : null, cid, o.key,
+         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING number`,
+    ).bind(o.id, cid, cid, o.ref, o.source, o.stored, paid ? 'paid' : 'pending', paid ? now : null, cid, o.key,
       o.name, o.phone, o.email, o.address, o.landmark, o.lat, o.lng, o.zone, o.vendor.id, o.vendor.name,
       o.hub, o.service, o.weight, o.subtotal, o.discount, o.fee, o.declared, o.insurance, o.total,
-      o.promised, o.token, o.note, ctx.user?.id ?? null, now, now),
+      o.promised, o.token, o.note, ctx.user?.id ?? null, now, now, o.terms),
     ...o.items.map((x) => db.prepare('INSERT INTO order_items (id, company_id, order_id, product_id, product_name, quantity, unit_price_fcfa, weight_g) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
       .bind(x.id, cid, o.id, x.product_id, x.name, x.qty, x.price, x.weight)),
-    // payée d'avance : la préparation s'ouvre tout de suite
-    ...(paid ? releaseStatements(ctx, { id: o.id, promised_at: o.promised, created_at: now }) : []),
+    // payée d'avance ou à terme : la préparation s'ouvre tout de suite
+    ...(release ? releaseStatements(ctx, { id: o.id, promised_at: o.promised, created_at: now }) : []),
   ];
 }
 
@@ -192,14 +223,15 @@ export async function createOrders(ctx, inputs, source) {
       results[results.indexOf(null)] = {
         line: b.line, ok: true, id: o.id, number: res[b.at].results[0]?.number ?? null, short: orderShort(o.id), external_ref: o.ref,
         zone: o.zone, delivery_fee_fcfa: o.fee, insurance_fee_fcfa: o.insurance, total_fcfa: o.total,
-        amount_due_fcfa: amountDue({ payment_method: o.method, payment_status: o.method === 'prepaid' ? 'paid' : 'pending', total_fcfa: o.total }),
+        amount_due_fcfa: amountDue({ payment_method: o.stored, payment_status: o.method === 'prepaid' ? 'paid' : 'pending', total_fcfa: o.total }),
+        payment_method: o.method, payment_terms_days: o.terms,
         promised_at: o.promised, tracking_token: o.token, tracking_url: trackingUrl(ctx, o.token),
       };
     }
     // message au client : demande de confirmation (paiement à la livraison) ou commande confirmée (payée d'avance)
     await sendLater(ctx, await Promise.all(built.map((b) => notifyOrder(ctx, b.o.method === 'cod' ? 'lg_cod_confirm' : 'lg_order_confirmed', {
       id: b.o.id, number: res[b.at].results[0]?.number, buyer_name: b.o.name, buyer_phone: b.o.phone, buyer_email: b.o.email, vendor_name: b.o.vendor.name,
-      payment_method: b.o.method, payment_status: b.o.method === 'prepaid' ? 'paid' : 'pending', total_fcfa: b.o.total, tracking_token: b.o.token,
+      payment_method: b.o.stored, payment_status: b.o.method === 'prepaid' ? 'paid' : 'pending', total_fcfa: b.o.total, tracking_token: b.o.token,
     }))));
   }
   return results;
@@ -266,7 +298,8 @@ export async function cancelOrder(ctx, companyId, orderId, reason) {
 const orderRow = (ctx, o) => ({
   id: o.id, number: o.number, short: orderShort(o.id), order_short: orderShort(o.id), external_ref: o.external_ref, source: o.source,
   status: o.status, customer: o.buyer_name, phone: o.buyer_phone, address: o.buyer_address, landmark: o.landmark, zone: o.delivery_zone,
-  vendor: o.vendor_name, service: o.service, payment_method: o.payment_method, paid: o.payment_status === 'paid',
+  vendor: o.vendor_name, service: o.service, payment_method: payMode(o), paid: o.payment_status === 'paid',
+  payment_terms_days: o.payment_terms_days ?? null, due_at: o.due_at ?? null, payment_ref: o.payment_ref ?? null,
   cod_confirmed_at: o.cod_confirmed_at, subtotal_fcfa: o.subtotal_fcfa, delivery_fee_fcfa: o.delivery_fee_fcfa,
   insurance_fee_fcfa: o.insurance_fee_fcfa, insured_value_fcfa: o.insured_value_fcfa, total_fcfa: o.total_fcfa, amount_due_fcfa: amountDue(o),
   promised_at: o.promised_at, created_at: o.created_at, cancel_reason: o.cancel_reason, has_position: o.delivery_lat != null,
@@ -299,6 +332,7 @@ export default {
           customer: a.p_customer, zone: a.p_zone, items: a.p_items, payment_method: a.p_payment_method, service: a.p_service,
           delivery_fee_fcfa: a.p_delivery_fee_fcfa, declared_value_fcfa: a.p_declared_value_fcfa, discount_fcfa: a.p_discount_fcfa,
           weight_g: a.p_weight_g, external_ref: a.p_external_ref, note: a.p_note, vendor_name: a.p_vendor_name,
+          payment_terms_days: a.p_payment_terms_days, promised_at: a.p_promised_at,
         }], 'manual');
         if (!r.ok) fail(r.error);
         if (!r.duplicate) await audit(ctx, 'order_create', 'order', r.id, { number: r.number, total: r.total_fcfa });

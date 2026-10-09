@@ -6,7 +6,7 @@ import { HttpError, json, readJson } from '../http.js';
 import { sha256Hex } from '../crypto.js';
 import { now, rateLimit } from '../auth.js';
 import { companyConfig } from '../config.js';
-import { createOrders, amountDue, trackingUrl } from '../rpc/commandes.js';
+import { createOrders, amountDue, trackingUrl, payMode } from '../rpc/commandes.js';
 import { audit } from '../rpc/core.js';
 
 async function companyForKey(request, env) {
@@ -39,7 +39,7 @@ export async function getOrder(request, env, { ref }) {
   if (!o) throw new HttpError(404, 'Commande inconnue.', 'unknown_order');
   const stop = o.stop ? JSON.parse(o.stop) : null;
   return json({
-    external_ref: o.external_ref, number: o.number, status: o.status, payment_method: o.payment_method, payment_status: o.payment_status,
+    external_ref: o.external_ref, number: o.number, status: o.status, payment_method: payMode(o), payment_status: o.payment_status, payment_terms_days: o.payment_terms_days ?? null, due_at: o.due_at ?? null,
     amount_due_fcfa: amountDue(o), total_fcfa: o.total_fcfa, delivery_fee_fcfa: o.delivery_fee_fcfa, zone: o.delivery_zone, promised_at: o.promised_at,
     steps: { created_at: o.created_at, confirmed_at: o.cod_confirmed_at ?? o.paid_at, in_transit_at: o.in_transit_at, delivered_at: o.delivered_at, cancelled_at: o.cancelled_at },
     delivery: stop ? { status: stop.status, eta: stop.eta, courier: stop.courier ? String(stop.courier).split(' ')[0] : null, failure_reason: stop.failure_reason } : null,
