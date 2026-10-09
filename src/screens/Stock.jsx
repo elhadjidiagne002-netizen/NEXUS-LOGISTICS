@@ -112,6 +112,8 @@ export function ProductForm({ p, me, onClose, onDone }) {
     <div className="grid cols-2">
       <Field label="Prix de vente (F)"><input className="input" inputMode="numeric" value={f.price_fcfa} onChange={s('price_fcfa')} /></Field>
       <Field label="Prix d'achat (F, facultatif)"><input className="input" inputMode="numeric" value={f.cost_fcfa ?? ''} onChange={s('cost_fcfa')} /></Field>
+      <Field label="TVA du produit"><select className="input" value={f.vat_rate ?? ''} onChange={(e) => setF({ ...f, vat_rate: e.target.value === '' ? null : Number(e.target.value) })}>
+        <option value="">Taux de l'entreprise</option><option value="18">18 %</option><option value="10">10 %</option><option value="0">Exonéré (0 %)</option></select></Field>
       <Field label="Référence (facultatif)"><input className="input mono" value={f.sku ?? ''} onChange={s('sku')} /></Field>
       <Field label="Code-barres (facultatif)"><div className="row" style={{ flexWrap: 'nowrap' }}>
         <input className="input mono" style={{ flex: 1, minWidth: 0 }} value={f.barcode ?? ''} onChange={s('barcode')} />
@@ -132,7 +134,7 @@ export function ProductForm({ p, me, onClose, onDone }) {
     <Btn kind="primary" size="xl" disabled={busy || !f.name?.trim()} onClick={() => run(async () => {
       const r = await rpc('lg_product_upsert', { p: { id: p.id, name: f.name, price_fcfa: num(f.price_fcfa) ?? 0, cost_fcfa: num(f.cost_fcfa), sku: f.sku || null, barcode: f.barcode || null,
         weight_g: f.weight_kg ? Math.round(num(f.weight_kg) * 1000) : null, min_stock: num(f.min_stock), supplier: f.supplier || null, supplier_id: f.supplier_id || null, vendor_name: f.vendor_name ?? null,
-        handling: f.handling ?? [], active: f.active !== false, stock: p.id ? null : num(f.stock),
+        handling: f.handling ?? [], active: f.active !== false, stock: p.id ? null : num(f.stock), vat_rate: f.vat_rate ?? null,
         length_cm: f.length_cm ?? null, width_cm: f.width_cm ?? null, height_cm: f.height_cm ?? null } });
       if (r?.ok !== false) onDone(r?.id, { name: f.name, sku: f.sku || null, barcode: f.barcode || null, price_fcfa: num(f.price_fcfa) ?? 0 });
       return r;

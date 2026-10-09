@@ -77,8 +77,10 @@ function NewOrder({ onClose, onDone }) {
   const [quote, setQuote] = useState(null);
   const [event] = useState(newEvent);
   const [run, busy] = useAction();
+  // prix du catalogue laissé tel quel : non envoyé, pour que le prix convenu d'une enseigne (ou sa remise) s'applique
+  const catalogue = (l) => l.product_id && products.data?.find((p) => p.id === l.product_id)?.price_fcfa === Number(l.unit_price_fcfa);
   const items = lines.filter((l) => l.name.trim() || l.product_id).map((l) => ({ product_id: l.product_id || null, name: l.name.trim() || null,
-    quantity: Number(l.quantity) || 0, unit_price_fcfa: l.unit_price_fcfa === '' ? null : Number(l.unit_price_fcfa),
+    quantity: Number(l.quantity) || 0, unit_price_fcfa: l.unit_price_fcfa === '' || catalogue(l) ? null : Number(l.unit_price_fcfa),
     weight_g: l.weight_kg === '' ? null : Math.round(Number(String(l.weight_kg).replace(',', '.')) * 1000) }));
   const subtotal = items.reduce((s, x) => s + (x.unit_price_fcfa ?? 0) * x.quantity, 0);
   const weight = items.reduce((s, x) => s + (x.weight_g ?? 0) * x.quantity, 0) || 1000;

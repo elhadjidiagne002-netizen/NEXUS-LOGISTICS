@@ -99,7 +99,7 @@ export default {
         const r = res.get(p.id) ?? 0; const available = p.stock == null ? null : p.stock - r;
         const state = stockState(p, available ?? 0);
         const oo = onOrder.get(p.id) ?? 0;
-        return { id: p.id, name: p.name, sku: p.sku, barcode: p.barcode, vendor: p.vendor_name, supplier: p.supplier_name ?? p.supplier, supplier_id: p.supplier_id,
+        return { id: p.id, name: p.name, sku: p.sku, barcode: p.barcode, vat_rate: p.vat_rate ?? null, vendor: p.vendor_name, supplier: p.supplier_name ?? p.supplier, supplier_id: p.supplier_id,
           on_order: oo, active: Boolean(p.active),
           price_fcfa: p.price_fcfa, cost_fcfa: p.cost_fcfa, weight_g: p.weight_g, stock: p.stock, reserved: r, available, min_stock: p.min_stock, state,
           to_order: p.min_stock != null && available != null && available <= p.min_stock ? Math.max(Math.max(p.min_stock * 2 - available, 1) - oo, 0) : 0,

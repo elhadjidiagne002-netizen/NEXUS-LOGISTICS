@@ -21,6 +21,9 @@ Content-Type: application/json
   `customer.lng` : sans zone reconnue, la commande est refusée (`unknown_zone`).
 - À terme (`"account"`) : délai en jours dans `payment_terms_days` (sinon celui du client, sinon 30) ; rien n'est
   encaissé à la livraison, la facture porte l'échéance. `promised_at` (AAAA-MM-JJ) impose une date de livraison.
+- Enseigne : `account_id` (facultatif ; sinon celle du magasin d'après son téléphone) applique ses prix convenus et
+  sa TVA. Un prix envoyé prime ; sans prix, le prix convenu (ou le catalogue moins la remise) s'applique.
+  `unit_price_ht` est accepté à la place de `unit_price_fcfa` (le TTC est calculé avec la TVA du produit).
 - Une même `external_ref` n'est jamais créée deux fois : un renvoi rend la commande existante (`duplicate: true`).
 - Jusqu'à 50 commandes d'un coup : `{ "orders": [ … ] }`. 300 appels par heure et par clé.
 

@@ -19,6 +19,7 @@ const Messages = lazy(() => import('./screens/Messages.jsx'));
 const Warehouse = lazy(() => import('./screens/Warehouse.jsx'));
 const Stock = lazy(() => import('./screens/Stock.jsx'));
 const Collecte = lazy(() => import('./screens/Collecte.jsx'));
+const Accounts = lazy(() => import('./screens/Accounts.jsx'));
 const Track = lazy(() => import('./screens/Track.jsx'));
 const Platform = lazy(() => import('./screens/Platform.jsx'));
 
@@ -32,6 +33,8 @@ const TILES = [
   { to: '/chauffeur', icon: 'bike', c: '#059669', title: 'Ma journée', short: 'Journée', sub: 'Arrêts, livraison, encaissement', group: 'Terrain', show: (m) => !!m.courier_id },
   { to: '/collecte', icon: 'download', c: '#9333ea', title: 'Commandes reçues', short: 'Reçues', sub: 'Bons reçus par e-mail ou déposés, lus par l’IA', group: 'Clients',
     show: (m) => has(m, 'support', 'dispatcher', 'dock_chief', 'accountant') },
+  { to: '/enseignes', icon: 'store', c: '#b45309', title: 'Enseignes', short: 'Enseignes', sub: 'Clients pro : magasins, prix convenus, TVA, délais', group: 'Clients',
+    show: (m) => has(m, 'accountant', 'support', 'dispatcher') },
   { to: '/stock', icon: 'inbox', c: '#16a34a', title: 'Produits et stock', short: 'Stock', sub: 'Catalogue, entrées, stock, à commander', group: 'Produits',
     show: (m) => has(m, 'picker', 'dock_chief', 'support', 'dispatcher', 'accountant') || m.is_vendor },
   { to: '/preparation', icon: 'box', c: '#0284c7', title: 'Préparation', short: 'Préparer', sub: 'Prélever, scanner, emballer, mettre à quai', group: 'Terrain', show: (m) => has(m, 'picker', 'dock_chief') || m.is_vendor },
@@ -233,7 +236,7 @@ function Shell({ me }) {
   const screens = {
     preparation: <Picking taskId={seg[1]} sub={seg[2]} />, entrepot: <Warehouse />, quai: <Dock sub={seg[1]} id={seg[2]} />, chauffeur: <Driver stopId={seg[2]} />,
     tour: <Control />, caisse: <Cash />, factures: <Billing invoiceId={seg[1]} />, sav: <Support />, colis: <Support code={seg[1]} />,
-    vendeur: <Vendor />, stock: <Stock />, collecte: <Collecte />, admin: <Admin />, analytique: <Analytics />, messages: <Messages />, plateforme: <Platform />,
+    vendeur: <Vendor />, stock: <Stock />, collecte: <Collecte />, enseignes: <Accounts />, admin: <Admin />, analytique: <Analytics />, messages: <Messages />, plateforme: <Platform />,
   };
   const tiles = TILES.filter((t) => t.show(me));
   const content = seg[0] ? screens[seg[0]] ?? <Home me={me} tiles={tiles} /> : tiles.length === 1 ? screens[tiles[0].to.slice(1)] : <Home me={me} tiles={tiles} />;

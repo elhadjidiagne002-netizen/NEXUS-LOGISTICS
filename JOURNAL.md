@@ -2,6 +2,28 @@
 
 Le plus récent en premier.
 
+## 09/10/2026 — Enseignes : tarifs négociés et TVA par enseigne et par produit
+- **Demande** : continuer la chaîne B2B avec les tarifs et la TVA par enseigne.
+- **Fait** (migration `0017_enseignes.sql`, `server/rpc/enseignes.js`, écran « Enseignes ») :
+  - Fiche enseigne : raison sociale facturée, NINEA/RC, adresse, e-mail de la comptabilité, délai de paiement,
+    remise générale (produits sans prix convenu), prix exprimés HT ou TTC, exonération de TVA, domaine d'où
+    arrivent ses bons.
+  - Magasins : fiches client rattachées à l'enseigne (nom, téléphone, zone, repère du quai).
+  - Grille de prix convenus par produit, saisie ou importée (CSV : référence / code-barres / nom + prix), exportable,
+    avec le TTC calculé et une alerte si le prix dépasse le catalogue.
+  - TVA par produit (fiche produit : taux de l'entreprise, 18 %, 10 %, exonéré).
+  - À la création d'une commande d'un magasin : prix convenu (HT + TVA du produit), sinon catalogue moins la
+    remise, client exonéré = TVA 0 ; délai de l'enseigne → à terme. Le prix HT, la TVA et l'origine du prix sont
+    FIGÉS sur chaque ligne (`order_items.unit_price_ht`, `vat_rate`, `price_source`) : la facture les reprend
+    (une TVA par ligne), adressée à la raison sociale de l'enseigne et « livrée à » le magasin. Un prix saisi
+    explicitement prime toujours ; à la saisie, un prix catalogue laissé tel quel n'est pas envoyé (le tarif joue).
+  - Collecte : enseigne reconnue (domaine de l'expéditeur ou nom lu), magasin proposé, écarts entre prix du bon et
+    prix convenus signalés ligne par ligne ; à la conversion, choix « prix du bon » ou « prix convenus ».
+- **Vérifié** : 114/114 tests (dont `test/server/enseignes.test.js` : tarif HT, remise, TVA 10 %, exonéré, import,
+  collecte, isolation) ; écran essayé dans l'aperçu local (enseigne créée, prix 4 000 HT → 4 720 TTC enregistré).
+- **Piège évité** : la fiche produit réécrit tous ses champs à chaque enregistrement ; la TVA n'est modifiée que si
+  elle est envoyée (sinon un écran qui ne la connaît pas l'aurait effacée).
+
 ## 09/10/2026 — Paiement à terme (sur facture) : la chaîne bon d'enseigne → préparation → livraison → encaissement
 - **Problème** : un bon d'enseigne (ex. Auchan, « 15 JOURS ») converti en commande ne pouvait être que « à la
   livraison » (bloqué en attente de confirmation, chauffeur chargé d'encaisser) ou « payé d'avance » (marqué payé
@@ -721,8 +743,8 @@ Dépôt git initialisé, aucun commit.
 
 ## Chantiers en attente
 - **Collecte par e-mail** : Worker e-mail + Email Routing `commandes.nexusmarket.sn`, secrets `INBOUND_SECRET`, `GROQ_API_KEY`.
-- **Suite de la chaîne B2B** : tarifs et TVA par enseigne, magasins d'une enseigne (fiche client → zone/téléphone
-  préremplis), tournées, vente embarquée, caisses consignées, taux de service, règlements partiels.
+- **Suite de la chaîne B2B** : tournées, vente embarquée, caisses consignées, taux de service, règlements
+  partiels, relances envoyées à l'e-mail de la comptabilité de l'enseigne.
 - **Portage Cloudflare : cycles C2 à C11 de `ROADMAP.md`** (le reste de cette liste vient après).
 - Connexion chauffeur par téléphone + code à 4 chiffres (exige une fonction serveur qui
   émet la session ; colonne `couriers.pin_hash` prévue).

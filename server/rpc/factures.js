@@ -52,8 +52,8 @@ export function wordsFr(value) {
 }
 const capital = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
-/** Vendeur, émetteur et client de la facture (lg_invoice_parties). */
-function parties(ctx, o) {
+/** Vendeur, émetteur et client de la facture (lg_invoice_parties). Enseigne : facturée à sa raison sociale, livrée au magasin. */
+function parties(ctx, o, acc = null) {
   const cfg = ctx.company.config; const co = ctx.company;
   const company = { name: co.name, ninea: cfg.company_ninea ?? null, rc: cfg.company_rc ?? null, address: cfg.company_address ?? co.city ?? null, phone: co.phone ?? null };
   const forVendor = cfg.invoice_issuer === 'vendor' && o.vendor_name;
@@ -61,7 +61,10 @@ function parties(ctx, o) {
     issuer_mode: forVendor ? 'vendor' : 'company',
     seller: forVendor ? { name: o.vendor_name, ninea: null, rc: null, address: null, phone: null, vat_registered: false } : { ...company, vat_registered: Boolean(company.ninea) },
     platform: { name: co.name, address: company.address, phone: company.phone },
-    customer: { name: o.buyer_name, phone: o.buyer_phone, email: o.buyer_email, address: [o.buyer_address, o.delivery_zone].filter(Boolean).join(', ') || null },
+    customer: acc
+      ? { name: acc.name, phone: acc.phone ?? o.buyer_phone, email: acc.email ?? o.buyer_email, address: acc.address ?? null, ninea: acc.ninea ?? null, rc: acc.rc ?? null,
+          vat_exempt: Boolean(acc.vat_exempt), delivered_to: [o.buyer_name, o.buyer_address, o.delivery_zone].filter(Boolean).join(', ') }
+      : { name: o.buyer_name, phone: o.buyer_phone, email: o.buyer_email, address: [o.buyer_address, o.delivery_zone].filter(Boolean).join(', ') || null },
   };
 }
 
@@ -77,12 +80,14 @@ const isUnique = (e) => /UNIQUE constraint failed/i.test(String(e?.message ?? e)
  */
 export async function issueInvoice(ctx, orderId) {
   const cid = ctx.company.id;
-  const [ex, os, items, cc] = await ctx.db.batch([
+  const [ex, os, items, cc, ac] = await ctx.db.batch([
     ctx.db.prepare('SELECT id, invoice_number FROM invoices WHERE order_id = ? AND company_id = ? AND credit_of IS NULL').bind(orderId, cid),
     ctx.db.prepare('SELECT * FROM orders WHERE id = ? AND company_id = ?').bind(orderId, cid),
-    ctx.db.prepare('SELECT id, product_name, quantity, unit_price_fcfa, line_status, picked_qty FROM order_items WHERE order_id = ? AND company_id = ? ORDER BY rowid').bind(orderId, cid),
+    ctx.db.prepare('SELECT id, product_name, quantity, unit_price_fcfa, unit_price_ht, vat_rate, line_status, picked_qty FROM order_items WHERE order_id = ? AND company_id = ? ORDER BY rowid').bind(orderId, cid),
     ctx.db.prepare("SELECT group_concat(DISTINCT method || coalesce(':' || payment_ref, '')) AS ref FROM cod_collections WHERE order_id = ? AND company_id = ?").bind(orderId, cid),
+    ctx.db.prepare('SELECT a.* FROM accounts a JOIN orders o ON o.account_id = a.id WHERE o.id = ? AND o.company_id = ? AND a.company_id = ?').bind(orderId, cid, cid),
   ]);
+  const acc = ac.results[0] ?? null;
   if (ex.results[0]) return { ok: true, already: true, id: ex.results[0].id, number: ex.results[0].invoice_number };
   const o = os.results[0];
   if (!o) return { ok: false, error: 'unknown_order' };
@@ -93,7 +98,9 @@ export async function issueInvoice(ctx, orderId) {
     full += it.unit_price_fcfa * it.quantity;
     const q = it.line_status === 'cancelled' ? 0 : it.line_status === 'short' ? it.picked_qty : it.quantity;
     if (q <= 0) continue;
-    lines.push({ kind: 'product', order_item_id: it.id, label: it.product_name, quantity: q, unit_price_ht: ht(it.unit_price_fcfa, rate), tva_rate: rate });
+    // TVA et HT figés sur la ligne à la commande (tarif d'enseigne, taux du produit) ; anciennes lignes : taux de l'entreprise
+    const lr = it.vat_rate ?? rate;
+    lines.push({ kind: 'product', order_item_id: it.id, label: it.product_name, quantity: q, unit_price_ht: it.unit_price_ht ?? ht(it.unit_price_fcfa, lr), tva_rate: lr });
     prod += it.unit_price_fcfa * q;
   }
   let disc = o.discount_fcfa ?? 0;
@@ -105,13 +112,15 @@ export async function issueInvoice(ctx, orderId) {
   if (o.delivery_fee_fcfa > 0) lines.push({ kind: 'delivery', label: `Livraison${o.delivery_zone ? ` — ${o.delivery_zone}` : ''}`, quantity: 1, unit_price_ht: ht(o.delivery_fee_fcfa, rate), tva_rate: rate });
   if (o.insurance_fee_fcfa > 0) lines.push({ kind: 'fee', label: 'Assurance du colis', quantity: 1, unit_price_ht: ht(o.insurance_fee_fcfa, rate), tva_rate: rate });
   const ttc = prod + (o.delivery_fee_fcfa ?? 0) + (o.insurance_fee_fcfa ?? 0);
+  // client exonéré : livraison et assurance sans TVA aussi
+  if (acc?.vat_exempt) for (const l of lines) if (l.kind !== 'product') { l.unit_price_ht = r2(l.unit_price_ht * (1 + l.tva_rate / 100)); l.tva_rate = 0; }
   const totalHt = r2(lines.reduce((s, l) => s + r2(l.unit_price_ht * l.quantity), 0));
   const commission = o.vendor_id ? Math.round((prod * Number(cfg.commission_pct ?? 0)) / 100) : 0;
   const year = ctx.now.slice(0, 4); const key = `FAC-${year}`; const id = uuid();
   // à terme : échéance (fixée à la livraison) et référence du bon du client, exigée par les enseignes sur la facture
   const terms = o.payment_terms_days;
   const due = terms == null ? null : o.due_at ?? new Date(Date.parse(o.delivered_at ?? ctx.now) + terms * 86400000).toISOString();
-  const meta = { ...parties(ctx, o), currency: 'XOF', kind: 'invoice', order_short: String(o.number), payment_method: payMode(o),
+  const meta = { ...parties(ctx, o, acc), currency: 'XOF', kind: 'invoice', order_short: String(o.number), payment_method: payMode(o),
     payment_ref: cc.results[0]?.ref ?? null, amount_words: `${capital(wordsFr(ttc))} francs CFA`, discount_fcfa: disc,
     payment_terms_days: terms ?? null, due_at: due, customer_ref: customerRef(o.external_ref) };
   try {
@@ -150,7 +159,7 @@ export async function creditNote(ctx, invoiceId, reqLines, reason, amount = null
     const want = (Array.isArray(reqLines) ? reqLines : []).filter((l) => l && l.order_item_id);
     if (want.length) {
       const [billed, items] = await ctx.db.batch([
-        ctx.db.prepare("SELECT order_item_id, quantity, tva_rate FROM invoice_lines WHERE invoice_id = ? AND kind = 'product'").bind(inv.id),
+        ctx.db.prepare("SELECT order_item_id, quantity, tva_rate, unit_price_ht FROM invoice_lines WHERE invoice_id = ? AND kind = 'product'").bind(inv.id),
         ctx.db.prepare('SELECT id, product_name, unit_price_fcfa FROM order_items WHERE order_id = ? AND company_id = ?').bind(inv.order_id, cid),
       ]);
       for (const l of want) {
@@ -160,7 +169,7 @@ export async function creditNote(ctx, invoiceId, reqLines, reason, amount = null
         if (!it) fail('unknown_line');
         if (!(q > 0)) fail('invalid_quantity');
         if (!b) fail('credit_exceeds_invoice');
-        lines.push({ kind: 'product', order_item_id: it.id, label: `${it.product_name} — ${text(reason, 80) ?? 'avoir'}`, quantity: q, unit_price_ht: -ht(it.unit_price_fcfa, b.tva_rate), tva_rate: b.tva_rate });
+        lines.push({ kind: 'product', order_item_id: it.id, label: `${it.product_name} — ${text(reason, 80) ?? 'avoir'}`, quantity: q, unit_price_ht: -(b.unit_price_ht ?? ht(it.unit_price_fcfa, b.tva_rate)), tva_rate: b.tva_rate });
         ttc += it.unit_price_fcfa * q;
         checks.push([it.id, b.quantity]);
       }

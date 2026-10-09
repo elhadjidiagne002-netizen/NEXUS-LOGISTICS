@@ -127,6 +127,10 @@ function Review({ id, onClose, onChange }) {
         {Object.keys(data.fields ?? {}).length > 0 && <div className="small">{Object.entries(data.fields).map(([k, v]) => <span key={k} className="badge plain" style={{ marginRight: 6 }}>{k} : {String(v ?? '—')}</span>)}</div>}
         {data.order_number_suspect && <div className="flash bad">Le n° du bon lu par l’IA ne figure pas tel quel dans le document : comparez avec l’original avant de créer la commande.</div>}
         {data.lines.some((l) => l.check === false) && <div className="flash todo">Certaines lignes ont un code (EAN ou référence) introuvable dans le document : elles sont marquées ⚠.</div>}
+        {d.account && <div className="flash info">Enseigne reconnue : <b>{d.account.name}</b> — {d.account.stores.length} magasin(s), prix {d.account.prices_ht ? 'HT' : 'TTC'}
+          {d.account.payment_terms_days != null ? `, paiement à ${d.account.payment_terms_days} jours` : ''}.</div>}
+        {d.price_checks?.length > 0 && <div className="flash todo"><div>Prix du bon différents des prix convenus avec {d.account.name} :
+          {d.price_checks.map((c) => <div key={c.index} className="small">· {data.lines[c.index]?.label} : bon {formatF(c.doc)}, convenu {formatF(c.tariff)} ({c.diff_pct > 0 ? '+' : ''}{c.diff_pct} %)</div>)}</div></div>}
         {data.total_mismatch && <div className="flash todo">Écart : les lignes font {formatF(data.lines_total)}, le document annonce {formatF(data.total_ht ?? data.total_ttc)}. Vérifiez les quantités et les prix.</div>}
         <div className="scroll-x"><table className="tbl"><thead><tr><th>Sur le document</th><th>Produit du catalogue</th><th className="num">Colis</th><th className="num">PCB</th><th className="num">Quantité</th><th className="num">Prix</th></tr></thead>
           <tbody>{data.lines.map((l, i) => <tr key={i} style={{ background: l.product_id ? undefined : 'var(--warn-bg, #fffbeb)' }}>
@@ -142,8 +146,15 @@ function Review({ id, onClose, onChange }) {
         <p className="small muted" style={{ margin: 0 }}>Rattachez une ligne une fois : ses codes et son libellé sont mémorisés pour les prochains bons de cet expéditeur.</p>
         {d.status !== 'converted' && <div className="row" style={{ flexWrap: 'wrap' }}>
           <Btn disabled={busy} onClick={() => save(false)}>Enregistrer</Btn>
-          {isOrder && <Btn kind="primary" disabled={busy || !data.lines.length} onClick={async () => { if (f) await rpc('lg_inbox_save', { p_id: id, p_data: data }); setConv({ name: data.delivery_place ?? data.customer?.store ?? data.customer?.name ?? '', phone: data.customer?.phone ?? '', address: data.delivery_place ?? '', zone: '', free: false,
-            pay: data.payment_terms_days != null ? 'account' : 'cod', terms: String(data.payment_terms_days ?? 30), promised: data.delivery_date ?? '' }); }}>Créer la commande</Btn>}
+          {isOrder && <Btn kind="primary" disabled={busy || !data.lines.length} onClick={async () => {
+            if (f) await rpc('lg_inbox_save', { p_id: id, p_data: data });
+            const acc = d.account; const terms = data.payment_terms_days ?? acc?.payment_terms_days;
+            // magasin de l'enseigne dont le nom ressemble au lieu de livraison du bon
+            const place = String(data.delivery_place ?? data.customer?.store ?? '').toUpperCase();
+            const st = acc?.stores.find((x) => place && (place.includes(x.name.toUpperCase()) || x.name.toUpperCase().includes(place))) ?? (acc?.stores.length === 1 ? acc.stores[0] : null);
+            setConv({ name: st?.name ?? data.delivery_place ?? data.customer?.store ?? data.customer?.name ?? '', phone: st?.phone ?? data.customer?.phone ?? '',
+              address: st?.address ?? data.delivery_place ?? '', zone: st?.zone ?? '', store: st?.id ?? '', account: acc?.id ?? '', prices: 'document', free: false,
+              pay: terms != null ? 'account' : 'cod', terms: String(terms ?? 30), promised: data.delivery_date ?? '' }); }}>Créer la commande</Btn>}
           {!isOrder && <Btn kind="primary" disabled={busy} onClick={() => save(true)}>Marquer traité</Btn>}
           <select className="input" style={{ maxWidth: 220 }} value="" onChange={(e) => e.target.value && run(async () => { const r = await rpc('lg_inbox_extract', { p_id: id, p_template: e.target.value }); refresh(); return r; }, { ok: 'Relu' })}>
             <option value="">Relire avec un modèle…</option>{(tpls.data ?? []).filter((t) => t.active).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
@@ -154,6 +165,10 @@ function Review({ id, onClose, onChange }) {
       {!data && d.status !== 'error' && <Loading />}
       {d.status === 'error' && <Btn onClick={() => run(async () => { const r = await rpc('lg_inbox_extract', { p_id: id }); refresh(); return r; })}>Relancer la lecture</Btn>}
       {conv && <Modal title="Créer la commande" onClose={() => setConv(null)}><div className="stack">
+        {d.account && <Field label={`Magasin de ${d.account.name}`}><select className="input" value={conv.store} onChange={(e) => {
+          const st = d.account.stores.find((x) => x.id === e.target.value);
+          setConv(st ? { ...conv, store: st.id, name: st.name, phone: st.phone, address: st.address ?? conv.address, zone: st.zone ?? conv.zone } : { ...conv, store: '' }); }}>
+          <option value="">Autre magasin (saisir ci-dessous)</option>{d.account.stores.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></Field>}
         <Field label="Client (magasin)"><input className="input" value={conv.name} onChange={(e) => setConv({ ...conv, name: e.target.value })} /></Field>
         <div className="grid cols-2"><Field label="Téléphone du magasin"><input className="input" type="tel" value={conv.phone} onChange={(e) => setConv({ ...conv, phone: e.target.value })} /></Field>
           <Field label="Zone de livraison"><select className="input" value={conv.zone} onChange={(e) => setConv({ ...conv, zone: e.target.value })}><option value="">Choisir…</option>
@@ -164,10 +179,13 @@ function Review({ id, onClose, onChange }) {
           {conv.pay === 'account' ? <Field label="Délai (jours après livraison)"><input className="input" inputMode="numeric" value={conv.terms} onChange={(e) => setConv({ ...conv, terms: e.target.value.replace(/\D/g, '') })} /></Field>
             : <div />}</div>
         <Field label="Livraison imposée le"><input className="input" type="date" value={conv.promised} onChange={(e) => setConv({ ...conv, promised: e.target.value })} /></Field>
+        {d.account && <Field label="Prix appliqués"><Chips options={[['document', 'Prix du bon'], ['tariff', 'Prix convenus']]} value={conv.prices} onChange={(v) => setConv({ ...conv, prices: v })} /></Field>}
+        {d.account && <label className="check"><input type="checkbox" checked={!!conv.account} onChange={(e) => setConv({ ...conv, account: e.target.checked ? d.account.id : '' })} /> Facturer à {d.account.name} (le magasin lui est rattaché)</label>}
         {conv.pay === 'account' && <p className="small muted">La commande part tout de suite en préparation ; rien n'est encaissé à la livraison ; la facture porte l'échéance et le n° du bon, puis la créance est suivie dans Factures (relances automatiques).</p>}
         {data.lines.some((l) => !l.product_id) && <label className="check"><input type="checkbox" checked={conv.free} onChange={(e) => setConv({ ...conv, free: e.target.checked })} /> Reprendre les lignes non rapprochées en articles libres (sans stock)</label>}
         <Btn kind="primary" size="xl" disabled={busy || !conv.zone || !conv.name} onClick={() => run(async () => {
           const r = await rpc('lg_inbox_convert', { p_id: id, p_customer: { name: conv.name, phone: conv.phone, address: conv.address }, p_zone: conv.zone, p_free_lines: conv.free,
+            p_account: conv.account || undefined, p_prices: conv.prices,
             p_payment_method: conv.pay, p_terms_days: conv.pay === 'account' && conv.terms !== '' ? Number(conv.terms) : undefined, p_promised_at: conv.promised || undefined });
           if (r.ok) { setConv(null); refresh(); }
           return r;

@@ -61,23 +61,64 @@ async function lookups(db, cid, inputs) {
   const stmts = [];
   const q = (sql, list) => chunks(list, 90).forEach((c) => stmts.push(['' + sql, db.prepare(sql.replace('$', c.map(() => '?').join(','))).bind(cid, ...c)]));
   q('SELECT external_ref, id, number FROM orders WHERE company_id = ? AND external_ref IN ($)', refs);
-  q('SELECT id, sku, name, price_fcfa, weight_g FROM products WHERE company_id = ? AND id IN ($)', ids);
-  q('SELECT id, sku, name, price_fcfa, weight_g FROM products WHERE company_id = ? AND sku IN ($)', skus);
+  q('SELECT id, sku, name, price_fcfa, weight_g, vat_rate FROM products WHERE company_id = ? AND id IN ($)', ids);
+  q('SELECT id, sku, name, price_fcfa, weight_g, vat_rate FROM products WHERE company_id = ? AND sku IN ($)', skus);
   q('SELECT phone_key FROM banned_numbers WHERE company_id = ? AND phone_key IN ($)', keys);
-  q('SELECT phone_key, payment_terms_days FROM customers WHERE company_id = ? AND payment_terms_days IS NOT NULL AND phone_key IN ($)', keys);
+  q('SELECT phone_key, payment_terms_days, account_id FROM customers WHERE company_id = ? AND (payment_terms_days IS NOT NULL OR account_id IS NOT NULL) AND phone_key IN ($)', keys);
   const res = stmts.length ? await db.batch(stmts.map((s) => s[1])) : [];
-  const out = { refs: new Map(), byId: new Map(), bySku: new Map(), banned: new Set(), terms: new Map() };
+  const out = { refs: new Map(), byId: new Map(), bySku: new Map(), banned: new Set(), terms: new Map(), custAccount: new Map(), accounts: new Map(), prices: new Map() };
   res.forEach((r, i) => {
     const sql = stmts[i][0];
     for (const row of r.results) {
       if (sql.includes('external_ref IN')) out.refs.set(row.external_ref, row);
       else if (sql.includes('AND id IN')) out.byId.set(row.id, row);
       else if (sql.includes('sku IN')) out.bySku.set(row.sku, row);
-      else if (sql.includes('payment_terms_days')) out.terms.set(row.phone_key, row.payment_terms_days);
-      else out.banned.add(row.phone_key);
+      else if (sql.includes('payment_terms_days')) {
+        if (row.payment_terms_days != null) out.terms.set(row.phone_key, row.payment_terms_days);
+        if (row.account_id) out.custAccount.set(row.phone_key, row.account_id);
+      } else out.banned.add(row.phone_key);
     }
   });
+  // enseignes en jeu (demandées ou rattachées au magasin) et leurs prix convenus : seconde lecture, seulement si besoin
+  const accIds = [...new Set([...inputs.map((i) => text(i?.account_id, 64)).filter(Boolean), ...out.custAccount.values()])];
+  if (accIds.length) {
+    const st = [];
+    for (const c of chunks(accIds, 90)) {
+      const ph = c.map(() => '?').join(',');
+      st.push(db.prepare(`SELECT * FROM accounts WHERE company_id = ? AND id IN (${ph})`).bind(cid, ...c));
+      st.push(db.prepare(`SELECT account_id, product_id, price_fcfa FROM account_prices WHERE company_id = ? AND account_id IN (${ph})`).bind(cid, ...c));
+    }
+    (await db.batch(st)).forEach((r, i) => {
+      for (const row of r.results) {
+        if (i % 2 === 0) out.accounts.set(row.id, row);
+        else out.prices.set(`${row.account_id}|${row.product_id}`, row.price_fcfa);
+      }
+    });
+  }
   return out;
+}
+
+const r2 = (x) => Math.round(x * 100) / 100;
+const vatOk = (v) => { const n = num(v); return n != null && n >= 0 && n <= 30 ? n : null; };
+/**
+ * Prix d'une ligne (TTC payé, HT et TVA figés sur la ligne). Ordre : prix donné (TTC, ou HT par unit_price_ht) >
+ * prix convenu de l'enseigne (HT ou TTC selon l'enseigne) > catalogue moins la remise de l'enseigne > catalogue.
+ * Le prix catalogue est TTC au taux du produit ; client exonéré : TVA 0, le HT du catalogue devient le prix.
+ */
+function linePrice(cfg, acc, look, p, x) {
+  const base = Number(cfg.tva_rate ?? 18);
+  const prodRate = p?.vat_rate ?? base;
+  const rate = acc?.vat_exempt ? 0 : vatOk(x?.vat_rate) ?? prodRate;
+  const given = x?.unit_price_fcfa ?? x?.price_fcfa;
+  const givenHt = x?.unit_price_ht == null || x.unit_price_ht === '' ? null : num(x.unit_price_ht);
+  const tariff = acc && p ? look.prices.get(`${acc.id}|${p.id}`) : undefined;
+  const fromHt = (ht, source) => ({ price: Math.round(ht * (1 + rate / 100)), ht: r2(ht), rate, source });
+  if (given != null && given !== '') { const v = int(given); return { price: v, ht: v == null ? null : r2(v / (1 + rate / 100)), rate, source: 'given' }; }
+  if (givenHt != null) return givenHt < 0 ? { price: -1 } : fromHt(givenHt, 'given');
+  if (tariff != null) return acc.prices_ht ? fromHt(tariff, 'tariff') : { price: tariff, ht: r2(tariff / (1 + rate / 100)), rate, source: 'tariff' };
+  if (!p) return { price: 0, ht: 0, rate, source: 'given' };
+  const disc = acc?.discount_pct > 0 ? acc.discount_pct : 0;
+  return fromHt((p.price_fcfa / (1 + prodRate / 100)) * (1 - disc / 100), disc ? 'discount' : 'catalogue');
 }
 
 const norm = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
@@ -91,6 +132,10 @@ function buildOrder(ctx, pricing, look, input, source) {
   if (look.banned.has(key)) return { error: 'banned_number' };
   const lat = num(c.lat); const lng = num(c.lng);
   if ((lat == null) !== (lng == null) || (lat != null && (Math.abs(lat) > 90 || Math.abs(lng) > 180))) return { error: 'invalid_position' };
+  // enseigne : demandée, sinon celle du magasin
+  const accId = text(input.account_id, 64) ?? look.custAccount.get(key) ?? null;
+  const acc = accId ? look.accounts.get(accId) : null;
+  if (accId && !acc) return { error: 'unknown_account' };
   const rawItems = Array.isArray(input.items) ? input.items : [];
   if (!rawItems.length) return { error: 'no_items' };
   if (rawItems.length > MAX_ITEMS) return { error: 'too_many_items' };
@@ -98,15 +143,15 @@ function buildOrder(ctx, pricing, look, input, source) {
   for (const x of rawItems) {
     const p = (x?.product_id && look.byId.get(String(x.product_id))) || (x?.sku && look.bySku.get(String(x.sku))) || null;
     if (x?.product_id && !p) return { error: 'unknown_product' };
-    // prix unitaire : unit_price_fcfa (nom canonique) ou price_fcfa (nom utilisé par l'ancienne notice de l'API)
-    const given = x?.unit_price_fcfa ?? x?.price_fcfa;
-    const qty = int(x?.quantity ?? 1); const price = given == null || given === '' ? p?.price_fcfa ?? 0 : int(given);
+    // prix unitaire : unit_price_fcfa (nom canonique, TTC) ou price_fcfa (ancienne notice de l'API), ou unit_price_ht
+    const lp = linePrice(cfg, acc, look, p, x);
+    const qty = int(x?.quantity ?? 1); const price = lp.price;
     const w = x?.weight_g == null || x.weight_g === '' ? p?.weight_g ?? null : int(x.weight_g);
     const pname = text(x?.name, 120) ?? p?.name;
     if (!pname) return { error: 'invalid_item' };
     if (!(qty > 0) || qty > 10000) return { error: 'invalid_quantity' };
     if (price == null || price < 0 || (w != null && w <= 0)) return { error: 'invalid_amount' };
-    items.push({ id: uuid(), product_id: p?.id ?? null, name: pname, qty, price, weight: w });
+    items.push({ id: uuid(), product_id: p?.id ?? null, name: pname, qty, price, weight: w, ht: lp.ht, vat: lp.rate, src: lp.source });
   }
   // zone : nommée (sans tenir compte des accents ni de la casse), sinon déduite de la position
   const zName = text(input.zone, 80);
@@ -116,10 +161,11 @@ function buildOrder(ctx, pricing, look, input, source) {
   const service = input.service || 'standard';
   if (!SERVICES.includes(service)) return { error: 'invalid_service' };
   // client « en compte » : à terme par défaut (sauf mode demandé explicitement)
-  const pm = input.payment_method == null || input.payment_method === '' ? (look.terms.has(key) ? 'account' : 'cod') : input.payment_method;
+  const accTerms = acc?.payment_terms_days ?? null;
+  const pm = input.payment_method == null || input.payment_method === '' ? (look.terms.has(key) || accTerms != null ? 'account' : 'cod') : input.payment_method;
   const method = ['cod', 'prepaid', 'account'].includes(pm) ? pm : null;
   if (!method) return { error: 'invalid_payment' };
-  const terms = method === 'account' ? termsOf(input, look.terms.get(key), cfg) : null;
+  const terms = method === 'account' ? termsOf(input, look.terms.get(key) ?? accTerms, cfg) : null;
   if (method === 'account' && terms == null) return { error: 'invalid_terms' };
   const subtotal = items.reduce((s, x) => s + x.qty * x.price, 0);
   const discount = int(input.discount_fcfa) ?? 0;
@@ -141,7 +187,7 @@ function buildOrder(ctx, pricing, look, input, source) {
     email: text(c.email, 120), address: text(c.address, 200), landmark: text(c.landmark, 200), lat, lng,
     zone: zone.name, vendor, hub: hub?.id ?? null, service, weight, subtotal, discount, fee, declared: declared > 0 ? declared : null,
     insurance, total: subtotal - discount + fee + insurance, promised: promisedOf(input.promised_at, ctx.now) ?? (q.ok ? q.promised_at : null), note: text(input.note, 500), items,
-    terms, stored: method === 'account' ? 'prepaid' : method,
+    terms, stored: method === 'account' ? 'prepaid' : method, account: acc?.id ?? null,
   };
 }
 
@@ -161,28 +207,29 @@ function orderStatements(ctx, o) {
   return [
     db.prepare("INSERT INTO counters (company_id, key, n) VALUES (?, 'commande', 1) ON CONFLICT (company_id, key) DO UPDATE SET n = n + 1").bind(cid),
     db.prepare(
-      `INSERT INTO customers (id, company_id, name, phone, phone_key, address, landmark, lat, lng, zone, payment_terms_days, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO customers (id, company_id, name, phone, phone_key, address, landmark, lat, lng, zone, payment_terms_days, account_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (company_id, phone_key) DO UPDATE SET name = excluded.name, phone = excluded.phone,
          payment_terms_days = coalesce(excluded.payment_terms_days, customers.payment_terms_days),
+         account_id = coalesce(excluded.account_id, customers.account_id),
          address = coalesce(excluded.address, customers.address), landmark = coalesce(excluded.landmark, customers.landmark),
          lat = coalesce(excluded.lat, customers.lat), lng = coalesce(excluded.lng, customers.lng), zone = excluded.zone, updated_at = excluded.updated_at`,
-    ).bind(uuid(), cid, o.name, o.phone, o.key, o.address, o.landmark, o.lat, o.lng, o.zone, o.terms, now, now),
+    ).bind(uuid(), cid, o.name, o.phone, o.key, o.address, o.landmark, o.lat, o.lng, o.zone, o.terms, o.account, now, now),
     // numéro sans trou : lu dans le compteur incrémenté par l'instruction précédente du MÊME lot (atomique)
     db.prepare(
       `INSERT INTO orders (id, company_id, number, external_ref, source, payment_method, payment_status, paid_at, customer_id,
          buyer_name, buyer_phone, buyer_email, buyer_address, landmark, delivery_lat, delivery_lng, delivery_zone, vendor_id, vendor_name,
          hub_id, service, weight_g, subtotal_fcfa, discount_fcfa, delivery_fee_fcfa, insured_value_fcfa, insurance_fee_fcfa, total_fcfa,
-         promised_at, tracking_token, note, created_by, created_at, updated_at, payment_terms_days)
+         promised_at, tracking_token, note, created_by, created_at, updated_at, payment_terms_days, account_id)
        VALUES (?, ?, (SELECT n FROM counters WHERE company_id = ? AND key = 'commande'), ?, ?, ?, ?, ?,
          (SELECT id FROM customers WHERE company_id = ? AND phone_key = ?),
-         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING number`,
+         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING number`,
     ).bind(o.id, cid, cid, o.ref, o.source, o.stored, paid ? 'paid' : 'pending', paid ? now : null, cid, o.key,
       o.name, o.phone, o.email, o.address, o.landmark, o.lat, o.lng, o.zone, o.vendor.id, o.vendor.name,
       o.hub, o.service, o.weight, o.subtotal, o.discount, o.fee, o.declared, o.insurance, o.total,
-      o.promised, o.token, o.note, ctx.user?.id ?? null, now, now, o.terms),
-    ...o.items.map((x) => db.prepare('INSERT INTO order_items (id, company_id, order_id, product_id, product_name, quantity, unit_price_fcfa, weight_g) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-      .bind(x.id, cid, o.id, x.product_id, x.name, x.qty, x.price, x.weight)),
+      o.promised, o.token, o.note, ctx.user?.id ?? null, now, now, o.terms, o.account),
+    ...o.items.map((x) => db.prepare(`INSERT INTO order_items (id, company_id, order_id, product_id, product_name, quantity, unit_price_fcfa, weight_g, unit_price_ht, vat_rate, price_source)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(x.id, cid, o.id, x.product_id, x.name, x.qty, x.price, x.weight, x.ht, x.vat, x.src)),
     // payée d'avance ou à terme : la préparation s'ouvre tout de suite
     ...(release ? releaseStatements(ctx, { id: o.id, promised_at: o.promised, created_at: now }) : []),
   ];
@@ -315,7 +362,7 @@ const productOut = (p) => ({
   id: p.id, name: p.name, sku: p.sku, barcode: p.barcode, price_fcfa: p.price_fcfa, stock: p.stock, weight_g: p.weight_g,
   length_cm: p.length_cm, width_cm: p.width_cm, height_cm: p.height_cm, handling: parseJson(p.handling, []),
   is_shippable: Boolean(p.is_shippable), active: Boolean(p.active), vendor: p.vendor_name, vendor_id: p.vendor_id,
-  internal_code: 'NXI-' + orderShort(p.id), min_stock: p.min_stock ?? null, cost_fcfa: p.cost_fcfa ?? null, supplier: p.supplier ?? null, supplier_id: p.supplier_id ?? null,
+  internal_code: 'NXI-' + orderShort(p.id), vat_rate: p.vat_rate ?? null, min_stock: p.min_stock ?? null, cost_fcfa: p.cost_fcfa ?? null, supplier: p.supplier ?? null, supplier_id: p.supplier_id ?? null,
 });
 const handlingOf = (v) => (Array.isArray(v) ? JSON.stringify([...new Set(v.filter((h) => HANDLING.includes(h)))]) : null);
 const dim = (v) => { const n = num(v); if (n != null && (n <= 0 || n > 1000)) fail('invalid_amount'); return n; };
@@ -332,7 +379,7 @@ export default {
           customer: a.p_customer, zone: a.p_zone, items: a.p_items, payment_method: a.p_payment_method, service: a.p_service,
           delivery_fee_fcfa: a.p_delivery_fee_fcfa, declared_value_fcfa: a.p_declared_value_fcfa, discount_fcfa: a.p_discount_fcfa,
           weight_g: a.p_weight_g, external_ref: a.p_external_ref, note: a.p_note, vendor_name: a.p_vendor_name,
-          payment_terms_days: a.p_payment_terms_days, promised_at: a.p_promised_at,
+          payment_terms_days: a.p_payment_terms_days, promised_at: a.p_promised_at, account_id: a.p_account_id,
         }], 'manual');
         if (!r.ok) fail(r.error);
         if (!r.duplicate) await audit(ctx, 'order_create', 'order', r.id, { number: r.number, total: r.total_fcfa });
@@ -528,8 +575,11 @@ export default {
         if (!s) fail('unknown_supplier', 404);
         supplierId = s.id; supplierName = s.name;
       }
+      // TVA du produit : vide = taux de l'entreprise, 0 = exonéré
+      const vat = p.vat_rate == null || p.vat_rate === '' ? null : vatOk(p.vat_rate);
+      if (p.vat_rate != null && p.vat_rate !== '' && vat == null) fail('invalid_vat');
       const vals = [name, text(p.sku, 64), text(p.barcode, 64), price, w, dim(p.length_cm), dim(p.width_cm), dim(p.height_cm),
-        handlingOf(p.handling) ?? '[]', p.is_shippable === false ? 0 : 1, p.active === false ? 0 : 1, minStock, cost, supplierName, supplierId];
+        handlingOf(p.handling) ?? '[]', p.is_shippable === false ? 0 : 1, p.active === false ? 0 : 1, minStock, cost, supplierName, supplierId, vat];
       // même code-barres ou même référence qu'un autre produit de l'entreprise : refusé (le scan doit être sans ambiguïté)
       const code = (v) => (v == null ? null : String(v).trim().toUpperCase());
       const dup = await ctx.db.prepare(`SELECT name FROM products WHERE company_id = ? AND id != ? AND
@@ -540,9 +590,9 @@ export default {
         const own = vendorOnly(ctx) ? ctx.user.id : null;
         const r = await ctx.db.prepare(
           `UPDATE products SET name = ?, sku = ?, barcode = ?, price_fcfa = ?, weight_g = ?, length_cm = ?, width_cm = ?, height_cm = ?,
-             handling = ?, is_shippable = ?, active = ?, min_stock = ?, cost_fcfa = ?, supplier = ?, supplier_id = ?, vendor_name = coalesce(?, vendor_name), updated_at = ?
+             handling = ?, is_shippable = ?, active = ?, min_stock = ?, cost_fcfa = ?, supplier = ?, supplier_id = ?, vat_rate = CASE WHEN ? = 1 THEN ? ELSE vat_rate END, vendor_name = coalesce(?, vendor_name), updated_at = ?
            WHERE id = ? AND company_id = ? AND (? IS NULL OR vendor_id = ?)`,
-        ).bind(...vals, staff ? text(p.vendor_name, 80) : null, ctx.now, String(p.id), ctx.company.id, own, own).run();
+        ).bind(...vals.slice(0, -1), 'vat_rate' in p ? 1 : 0, vat, staff ? text(p.vendor_name, 80) : null, ctx.now, String(p.id), ctx.company.id, own, own).run();  // TVA modifiée seulement si envoyée
         if (!r.meta.changes) fail('unknown_product', 404);
         await audit(ctx, 'product_update', 'product', p.id, { name });
         return { ok: true, id: p.id };
@@ -552,8 +602,8 @@ export default {
       if (initial != null && initial < 0) fail('invalid_quantity');
       await ctx.db.batch([
         ctx.db.prepare(
-          `INSERT INTO products (name, sku, barcode, price_fcfa, weight_g, length_cm, width_cm, height_cm, handling, is_shippable, active, min_stock, cost_fcfa, supplier, supplier_id,
-             id, company_id, vendor_id, vendor_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO products (name, sku, barcode, price_fcfa, weight_g, length_cm, width_cm, height_cm, handling, is_shippable, active, min_stock, cost_fcfa, supplier, supplier_id, vat_rate,
+             id, company_id, vendor_id, vendor_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         ).bind(...vals, id, ctx.company.id, vendorOnly(ctx) ? ctx.user.id : null, vendorOnly(ctx) ? ctx.user.name : text(p.vendor_name, 80)),
         ...(initial != null ? stockMoveStatements(ctx, { product: id, delta: initial, kind: 'initial', reason: 'stock de départ' }) : []),
       ]);

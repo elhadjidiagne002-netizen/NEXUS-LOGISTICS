@@ -4,6 +4,7 @@
 // transformation en commande (bons de commande) ou export Excel (toutes données).
 import { fail, audit, hasRole, text, int, uuid, parseJson } from './core.js';
 import { createOrders } from './commandes.js';
+import { findAccount, priceChecks } from './enseignes.js';
 import { documentToText, llmJson, buildPrompt, normalizeExtraction, normAlias, scopeOf, guessType, DOC_TYPES, MAX_TEXT } from '../extract.js';
 
 const VIEW = ['support', 'dispatcher', 'dock_chief', 'accountant'];
@@ -138,7 +139,11 @@ export default {
       if (!d) fail('unknown_document', 404);
       const order = d.order_id ? await ctx.db.prepare('SELECT id, number, status FROM orders WHERE id = ? AND company_id = ?').bind(d.order_id, ctx.company.id).first() : null;
       const zones = (await ctx.db.prepare('SELECT name FROM zones WHERE company_id = ? AND served = 1 ORDER BY name').bind(ctx.company.id).all()).results.map((z) => z.name);
-      return { ...summary(d), text: d.text, data: parseJson(d.data, null), template_id: d.template_id, order, zones };
+      const data = parseJson(d.data, null);
+      // enseigne reconnue (adresse de l'expéditeur, nom lu) : ses magasins, et les prix du bon face aux prix convenus
+      const account = data ? await findAccount(ctx, { sender: d.sender, names: [data.customer?.name, data.customer?.store, data.delivery_place] }) : null;
+      const checks = account ? await priceChecks(ctx, account, data.lines) : [];
+      return { ...summary(d), text: d.text, data, template_id: d.template_id, order, zones, account, price_checks: checks };
     },
   },
 
@@ -234,7 +239,21 @@ export default {
         unit_price_fcfa: l.unit_price != null ? Math.round(l.unit_price) : undefined }));
       if (!items.length) return { ok: false, error: 'no_lines' };
       const c = a.p_customer && typeof a.p_customer === 'object' ? a.p_customer : {};
+      // enseigne : prix du bon exprimés comme ses prix convenus (HT par défaut) ; « tarif » = le prix convenu prime
+      const acc = a.p_account ? await ctx.db.prepare('SELECT id, prices_ht FROM accounts WHERE id = ? AND company_id = ?').bind(String(a.p_account), ctx.company.id).first() : null;
+      if (a.p_account && !acc) fail('unknown_account', 404);
+      if (acc) {
+        const priced = a.p_prices === 'tariff'
+          ? new Set((await ctx.db.prepare('SELECT product_id FROM account_prices WHERE account_id = ? AND company_id = ?').bind(acc.id, ctx.company.id).all()).results.map((x) => x.product_id))
+          : new Set();
+        for (const it of items) {
+          const doc = it.unit_price_fcfa; delete it.unit_price_fcfa;
+          if (it.product_id && priced.has(it.product_id)) continue;      // le prix convenu s'applique
+          if (doc != null) it[acc.prices_ht ? 'unit_price_ht' : 'unit_price_fcfa'] = doc;
+        }
+      }
       const [r] = await createOrders(ctx, [{
+        account_id: acc?.id,
         external_ref: data.order_number ? `${scopeOf(d.sender) || 'bon'}:${data.order_number}` : `doc:${d.id}`,
         customer: { name: text(c.name, 80) ?? data.customer?.store ?? data.customer?.name, phone: text(c.phone, 30) ?? data.customer?.phone,
           address: text(c.address, 200) ?? data.delivery_place ?? data.customer?.address },
