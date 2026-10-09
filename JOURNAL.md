@@ -2,6 +2,20 @@
 
 Le plus récent en premier.
 
+## 09/10/2026 — Réception des bons par e-mail : Worker et adresse, routage en attente du jeton
+- **Décision utilisateur** : garder `commandes.nexusmarket.sn`.
+- **Contraintes relevées** : la messagerie de `nexusmarket.sn` est chez OVH (Zimbra, MX `mx1/2/3.mail.ovh.net`) :
+  ne JAMAIS activer le routage e-mail Cloudflare sur le domaine principal (il remplacerait ces MX). Sur un
+  sous-domaine, pas de règle « toutes adresses » et 200 règles au plus.
+- **Fait** : adresse de chaque entreprise = `bons+<clé>@commandes.nexusmarket.sn` (adressage plus) → une seule règle
+  `bons@…` pour toutes. Worker `nexus-logistics-mail` (`mail/`, postal-mime 2.7.6) déployé : découpe le message,
+  écarte les logos insérés, remet le reste à `/api/inbound/email`, rejette le message avec une explication en cas
+  de refus ou de panne. Secret `INBOUND_SECRET` généré une fois et posé sur Pages et sur le Worker depuis le même
+  fichier. Vérifié en production : faux secret → 403 ; vrai secret, adresse inconnue → 200 « unknown_address »
+  (aucune écriture).
+- **En attente** : jeton Cloudflare « Email Routing Rules : Edit » + DNS pour activer le sous-domaine, l'adressage
+  plus et la règle `bons@commandes.nexusmarket.sn` → Worker (en vérifiant avant/après que les MX OVH ne bougent pas).
+
 ## 09/10/2026 — Enseignes : tarifs négociés et TVA par enseigne et par produit
 - **Demande** : continuer la chaîne B2B avec les tarifs et la TVA par enseigne.
 - **Fait** (migration `0017_enseignes.sql`, `server/rpc/enseignes.js`, écran « Enseignes ») :
@@ -742,7 +756,7 @@ Dépôt git initialisé, aucun commit.
   n'est plus la cible : les migrations `supabase/` ne seront PAS appliquées (archive de référence).
 
 ## Chantiers en attente
-- **Collecte par e-mail** : Worker e-mail + Email Routing `commandes.nexusmarket.sn`, secrets `INBOUND_SECRET`, `GROQ_API_KEY`.
+- **Collecte par e-mail** : routage `commandes.nexusmarket.sn` (sous-domaine + adressage plus + règle `bons@` → Worker) ; clé `GROQ_API_KEY` facultative (repli Workers AI).
 - **Suite de la chaîne B2B** : tournées, vente embarquée, caisses consignées, taux de service, règlements
   partiels, relances envoyées à l'e-mail de la comptabilité de l'enseigne.
 - **Portage Cloudflare : cycles C2 à C11 de `ROADMAP.md`** (le reste de cette liste vient après).
