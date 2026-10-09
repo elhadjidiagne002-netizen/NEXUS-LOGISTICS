@@ -1,0 +1,9 @@
+{
+  "name": "nexus-logistics-mail",
+  "private": true,
+  "type": "module",
+  "description": "Réception des bons de commande par e-mail (Cloudflare Email Routing → /api/inbound/email).",
+  "dependencies": {
+    "postal-mime": "2.7.6"
+  }
+}

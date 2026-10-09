@@ -35,7 +35,9 @@ jobs:
           cache: npm
 
       - name: Installation
-        run: npm ci
+        run: |
+          npm ci
+          npm ci --prefix mail
 
       # Logique serveur (D1 imitée sur node:sqlite) et algorithmes de l'interface
       - name: Tests (serveur + algorithmes)

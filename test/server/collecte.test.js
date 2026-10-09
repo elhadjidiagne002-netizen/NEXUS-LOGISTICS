@@ -74,7 +74,7 @@ test('dépôt d\'un bon : lu, rapproché, correction apprise, réutilisée au bo
 test('e-mail entrant : secret obligatoire, adresse de l\'entreprise, pièces jointes, pas de doublon', async () => {
   const env = makeEnv(); env.AI = fakeAI(); env.INBOUND_SECRET = 's'.repeat(32); const S = await setup(env);
   const { address } = await S.admin.rpc('lg_inbox_address');
-  assert.match(address, /^express-dakar-[0-9a-f]{6}@commandes\.nexusmarket\.sn$/);
+  assert.match(address, /^bons\+express-dakar-[0-9a-f]{6}@commandes\.nexusmarket\.sn$/);
   const post = (body, secret = env.INBOUND_SECRET) => handle(new Request('https://logistique.test/api/inbound/email', { method: 'POST',
     headers: { 'content-type': 'application/json', 'x-inbound-secret': secret }, body: JSON.stringify(body) }), env).then(async (r) => ({ status: r.status, data: await r.json() }));
   const mail = { to: address, from: 'Achats <achats@enseigne-test.sn>', subject: 'Commande 123456', message_id: '<abc@enseigne-test.sn>',
@@ -82,7 +82,7 @@ test('e-mail entrant : secret obligatoire, adresse de l\'entreprise, pièces joi
   assert.equal((await post(mail, 'x'.repeat(32))).status, 403);
   assert.equal((await post(mail)).data.accepted, 1, 'le logo (format non lu) est ignoré');
   assert.equal((await post(mail)).data.accepted, 0, 'même e-mail renvoyé : rien de nouveau');
-  assert.deepEqual((await post({ ...mail, to: 'inconnu@commandes.nexusmarket.sn', message_id: '<z>' })).data, { ok: true, accepted: 0, reason: 'unknown_address' });
+  assert.deepEqual((await post({ ...mail, to: 'bons+inconnu@commandes.nexusmarket.sn', message_id: '<z>' })).data, { ok: true, accepted: 0, reason: 'unknown_address' });
   const [doc] = await S.support.rpc('lg_inbox_list', {});
   assert.deepEqual([doc.source, doc.sender, doc.status, doc.order_number], ['email', 'Achats <achats@enseigne-test.sn>', 'to_review', '123456']);
   // le fichier d'origine se relit avec la session

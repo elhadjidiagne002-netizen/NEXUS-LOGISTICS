@@ -1,4 +1,4 @@
-// E-mails reçus sur <cle>@commandes.nexusmarket.sn : le Worker mail/ (Cloudflare Email Routing) les découpe et les
+// E-mails reçus sur bons+<cle>@commandes.nexusmarket.sn : le Worker mail/ (Cloudflare Email Routing) les découpe et les
 // envoie ici (POST /api/inbound/email, en-tête x-inbound-secret = INBOUND_SECRET). Chaque pièce jointe lisible (PDF,
 // Excel, Word, photo, CSV) devient un document ; sans pièce jointe, le corps du message en devient un. Lecture par
 // l'IA ensuite (ctx.waitUntil), pour répondre vite au Worker. Un même e-mail renvoyé n'est pas compté deux fois.
@@ -17,7 +17,9 @@ export async function email(request, env, _p, ctx) {
   if (!env.INBOUND_SECRET) throw new HttpError(503, 'Réception des e-mails non configurée.', 'inbound_disabled');
   if (!same(request.headers.get('x-inbound-secret'), env.INBOUND_SECRET)) throw new HttpError(403, 'Accès refusé.', 'forbidden');
   const m = await readJson(request, 30_000_000);
-  const local = String(m.to ?? '').toLowerCase().split('@')[0].split('+')[0].trim();
+  // bons+<clé>@… (adressage plus, règle unique) ; <clé>@… accepté aussi (règle propre à une entreprise)
+  const lp = String(m.to ?? '').toLowerCase().split('@')[0].trim();
+  const local = lp.includes('+') ? lp.slice(lp.indexOf('+') + 1) : lp;
   const company = local ? await env.DB.prepare('SELECT id FROM companies WHERE inbound_key = ? AND suspended_at IS NULL').bind(local).first() : null;
   // adresse inconnue : on répond 200 pour que l'expéditeur ne reçoive pas d'erreur exploitable (pas de fuite d'adresses)
   if (!company) return json({ ok: true, accepted: 0, reason: 'unknown_address' });

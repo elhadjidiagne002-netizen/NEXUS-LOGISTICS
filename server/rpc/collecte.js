@@ -11,6 +11,9 @@ const VIEW = ['support', 'dispatcher', 'dock_chief', 'accountant'];
 const KINDS = ['order', 'invoice', 'delivery_note', 'price_list', 'custom'];
 const MAX_FILE = 1_500_000;
 export const INBOUND_DOMAIN = 'commandes.nexusmarket.sn';
+// Une seule règle de routage (bons@…) pour toutes les entreprises : chacune reçoit sur bons+<clé>@… (adressage plus,
+// RFC 5233, activé dans le routage e-mail Cloudflare). Pas de règle par entreprise (plafond de 200 par domaine).
+export const INBOUND_MAILBOX = 'bons';
 const view = (ctx) => { if (!hasRole(ctx, VIEW)) fail('forbidden', 403); };
 
 const fieldList = (v) => (Array.isArray(v) ? v : []).slice(0, 40).map((f) => ({
@@ -113,7 +116,7 @@ export default {
         await ctx.db.prepare('UPDATE companies SET inbound_key = ? WHERE id = ? AND inbound_key IS NULL').bind(key, ctx.company.id).run();
         key = await ctx.db.prepare('SELECT inbound_key FROM companies WHERE id = ?').bind(ctx.company.id).first('inbound_key');
       }
-      return { address: `${key}@${INBOUND_DOMAIN}`, active: Boolean(ctx.env.INBOUND_SECRET) };
+      return { address: `${INBOUND_MAILBOX}+${key}@${INBOUND_DOMAIN}`, active: Boolean(ctx.env.INBOUND_SECRET) };
     },
   },
 

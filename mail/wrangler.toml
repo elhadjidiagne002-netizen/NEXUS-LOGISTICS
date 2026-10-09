@@ -1,0 +1,14 @@
+# Worker de réception des e-mails : bons+<clé>@commandes.nexusmarket.sn → règle de routage unique bons@… → ce Worker,
+# qui découpe le message (pièces jointes) et le remet à l'application (POST /api/inbound/email).
+# Secret INBOUND_SECRET : même valeur que le secret INBOUND_SECRET du projet Pages nexus-logistics, posée aux deux
+# endroits depuis le même fichier généré (jamais retapée à la main).
+name = "nexus-logistics-mail"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+workers_dev = false
+
+[vars]
+INBOUND_URL = "https://logistique.nexusmarket.sn/api/inbound/email"
+
+[observability]
+enabled = true
