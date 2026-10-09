@@ -23,6 +23,11 @@ database_name = "devizo"
 database_id = "b0f888bd-a0d2-4a1d-b731-ac9d68635b4b"
 migrations_dir = "migrations-auth-inexistant"
 
+# Workers AI : conversion des documents reçus en texte (toMarkdown : PDF, Excel, Word, images) et lecture de
+# secours quand GROQ_API_KEY n'est pas posée (collecte, server/extract.js). Offre gratuite (quota quotidien).
+[ai]
+binding = "AI"
+
 # Photos et signatures de preuve (cycle C5). Sans cette liaison, elles sont gardées dans la table `files` de D1
 # (repli gratuit, ≤ 1,5 Mo par fichier). Pour passer à R2 (10 Go gratuits) : créer le compartiment
 #   npx wrangler r2 bucket create nexus-logistics-preuves

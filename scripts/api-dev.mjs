@@ -26,6 +26,27 @@ if (env.DEV_ADMIN_EMAIL && env.DEV_ADMIN_PASSWORD) {
   env.ADMIN_EMAILS ??= env.DEV_ADMIN_EMAIL;
 }
 
+// Collecte en local : vraie IA Cloudflare (Workers AI par l'API REST, jeton OAuth de wrangler sur ce poste) si
+// DEV_CF_AI=1 dans .dev.vars. Équivalent local de la liaison AI de Pages (toMarkdown + run).
+if (env.DEV_CF_AI === '1' && !env.AI) {
+  const account = 'b052ef72eb7bca73ee5f8a26be23f8d2';
+  const tok = () => readFileSync(`${process.env.APPDATA}/xdg.config/.wrangler/config/default.toml`, 'utf8').match(/oauth_token = "([^"]+)"/)?.[1];
+  const api = (path, init) => fetch(`https://api.cloudflare.com/client/v4/accounts/${account}/ai/${path}`, { ...init, headers: { authorization: `Bearer ${tok()}`, ...(init.headers ?? {}) } }).then((r) => r.json());
+  env.AI = {
+    async toMarkdown(files) {
+      const fd = new FormData(); for (const f of files) fd.append('files', f.blob, f.name);
+      const j = await api('tomarkdown', { method: 'POST', body: fd });
+      return j.success ? j.result : files.map((f) => ({ name: f.name, format: 'error', error: JSON.stringify(j.errors) }));
+    },
+    async run(model, input) {
+      const j = await api(`run/${model}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) });
+      if (!j.success) throw new Error(JSON.stringify(j.errors));
+      return j.result;
+    },
+  };
+  console.log('Workers AI (REST) branché pour la collecte');
+}
+
 createServer(async (req, res) => {
   const chunks = [];
   for await (const c of req) chunks.push(c);

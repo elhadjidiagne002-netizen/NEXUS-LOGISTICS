@@ -1,5 +1,18 @@
 // Codes renvoyés par les fonctions de la base → phrases courtes pour le terrain.
 const M = {
+  // commandes reçues (collecte, lecture IA)
+  unknown_document: 'Document inconnu.',
+  already_converted: 'Une commande a déjà été créée à partir de ce document.',
+  unmatched_lines: 'Des lignes ne sont pas rattachées à un produit : rattachez-les, ou cochez « articles libres ».',
+  unsupported_type: 'Format de fichier non lu (PDF, Excel, Word, CSV ou photo).',
+  file_too_large: 'Fichier trop lourd (1,5 Mo au plus).',
+  empty_file: 'Fichier vide.',
+  invalid_data: 'Données invalides.',
+  unknown_template: 'Modèle de lecture inconnu.',
+  nothing_to_export: 'Aucun document lu sur cette période.',
+  ai_busy: "L'IA est très demandée en ce moment : relancez dans une minute.",
+  ai_failed: "L'IA ne répond pas : relancez plus tard.",
+  no_ai: "La lecture par IA n'est pas configurée sur la plateforme.",
   // fournisseurs et bons de commande
   unknown_supplier: 'Fournisseur inconnu.',
   duplicate_supplier: 'Un fournisseur porte déjà ce nom.',
