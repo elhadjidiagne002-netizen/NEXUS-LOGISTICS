@@ -13,8 +13,12 @@ Le plus récent en premier.
   de refus ou de panne. Secret `INBOUND_SECRET` généré une fois et posé sur Pages et sur le Worker depuis le même
   fichier. Vérifié en production : faux secret → 403 ; vrai secret, adresse inconnue → 200 « unknown_address »
   (aucune écriture).
-- **En attente** : jeton Cloudflare « Email Routing Rules : Edit » + DNS pour activer le sous-domaine, l'adressage
-  plus et la règle `bons@commandes.nexusmarket.sn` → Worker (en vérifiant avant/après que les MX OVH ne bougent pas).
+- **Routage activé (09/10, 13:56)** par l'API, sous-domaine seul (`POST /email/routing/dns {name}`) : 3 MX
+  `routeN.mx.cloudflare.net` + SPF posés sur `commandes.nexusmarket.sn` uniquement ; adressage plus activé ; règle
+  `bons@commandes.nexusmarket.sn` → Worker `nexus-logistics-mail`. Vérifié avant/après (et par DNS public) : MX OVH
+  du domaine principal intacts (1/5/100), SPF OVH intact. Sauvegarde complète des 27 enregistrements DNS prise avant.
+  Le routage de la zone affiche « misconfigured » pour le domaine principal : C'EST VOULU (ses MX restent OVH).
+- **Reste** : un vrai e-mail de bout en bout (envoyé par l'utilisateur à l'adresse de « Commandes reçues »).
 
 ## 09/10/2026 — Enseignes : tarifs négociés et TVA par enseigne et par produit
 - **Demande** : continuer la chaîne B2B avec les tarifs et la TVA par enseigne.
@@ -756,7 +760,7 @@ Dépôt git initialisé, aucun commit.
   n'est plus la cible : les migrations `supabase/` ne seront PAS appliquées (archive de référence).
 
 ## Chantiers en attente
-- **Collecte par e-mail** : routage `commandes.nexusmarket.sn` (sous-domaine + adressage plus + règle `bons@` → Worker) ; clé `GROQ_API_KEY` facultative (repli Workers AI).
+- **Collecte par e-mail** : branchée ; reste l'essai de bout en bout avec un vrai e-mail ; clé `GROQ_API_KEY` facultative (repli Workers AI).
 - **Suite de la chaîne B2B** : tournées, vente embarquée, caisses consignées, taux de service, règlements
   partiels, relances envoyées à l'e-mail de la comptabilité de l'enseigne.
 - **Portage Cloudflare : cycles C2 à C11 de `ROADMAP.md`** (le reste de cette liste vient après).

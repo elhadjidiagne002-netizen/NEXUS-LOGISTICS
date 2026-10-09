@@ -80,6 +80,11 @@ Plan et état : **`ROADMAP.md`**. Historique : `JOURNAL.md`.
    (`json_group_array`, `batch`) plutôt qu'en boucle. D1 limite à 100 paramètres liés par requête.
 9. **Jamais `502`** comme code d'erreur (Cloudflare remplace le corps) : `500`.
 10. Dates en texte ISO UTC (`ctx.now`) ; affichage à l'heure de Dakar côté interface.
+12. **Routage e-mail Cloudflare : sous-domaine `commandes.nexusmarket.sn` SEULEMENT.** La messagerie de
+    `nexusmarket.sn` est chez OVH (Zimbra, MX mx1/2/3.mail.ovh.net) : ne jamais « réparer » le statut
+    « misconfigured » du domaine principal ni appeler `/email/routing/enable` (cela remplacerait ses MX). Une seule
+    règle `bons@commandes.nexusmarket.sn` → Worker `nexus-logistics-mail` (`mail/`) ; chaque entreprise reçoit sur
+    `bons+<inbound_key>@…` (adressage plus). Secret `INBOUND_SECRET` identique Pages / Worker.
 11. **Ne jamais reconstruire une table parente** (CREATE … _new / DROP / RENAME pour changer un CHECK) : le DROP
     déclenche les `ON DELETE CASCADE` des tables filles, même avec `defer_foreign_keys` (vérifié : toutes les
     `order_items` effacées). Ajouter une colonne (`ALTER TABLE … ADD COLUMN`) à la place. Exemple : le paiement
